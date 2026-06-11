@@ -1,28 +1,15 @@
 {
-  "dependencies": {
-    "@babel/preset-env": "^7.28.5",
-    "@babel/preset-react": "^7.28.5",
-    "@babel/register": "^7.28.3",
-    "@react-docx/core": "^0.1.6",
-    "axios": "^1.13.2",
-    "body-parser": "^2.2.1",
-    "cors": "^2.8.5",
-    "docx": "^9.5.1",
-    "docxtemplater": "^3.39.0",
-    "express": "^5.1.0",
-    "html-docx-js": "^0.3.1",
-    "html-to-docx": "^1.8.0",
-    "html2pdf.js": "^0.12.1",
-    "libreoffice-convert": "^1.7.0",
-    "lucide-react": "^0.555.0",
-    "mammoth": "^1.11.0",
-    "mongoose": "^9.0.0",
-    "nodemon": "^3.1.11",
-    "pdf2pic": "^3.2.0",
-    "pizzip": "^3.2.0",
-    "puppeteer": "^24.31.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.17"
+  "name": "tender-app",
+  "version": "1.0.0",
+  "description": "Tender Management Application - MERN Stack",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "seed": "cd server && node seed.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

@@ -36,7 +36,7 @@ function Dashboard() {
   const [genLoading, setGenLoading] = useState(false); // New state for doc generation
 
   // API Base URL
-  const API_URL = "http://localhost:5000/api";
+  const API_URL = "/api";
 
   // --- STATE ---
   const [savedTenders, setSavedTenders] = useState([]);
