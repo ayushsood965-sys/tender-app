@@ -1,70 +1,203 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
-    Layers,
-    FileText,
-    List,
-    Database,
-    CheckSquare,
+    LayoutDashboard,
+    FilePlus2,
+    FolderKanban,
+    ScrollText,
+    ShieldAlert,
+    LogOut,
+    Sparkles,
+    User,
+    ChevronRight,
+    Building2,
+    Shield,
 } from "lucide-react";
 
-const Sidebar = () => {
-    const location = useLocation();
-    const isActive = (path) => location.pathname === path;
+export default function Sidebar({ isOpen, onClose }) {
+    const { user, logout, isSuperAdmin } = useAuth();
+    const navigate = useNavigate();
+
+    const handleLogout = () => {
+        logout();
+        navigate("/landing");
+    };
 
     const navItems = [
-        { path: "/", label: "Create Tender", icon: FileText },
-        { path: "/my-tenders", label: "My Tenders", icon: Layers },
-        { path: "/categories", label: "T&C Categories", icon: List },
-        { path: "/terms", label: "T&C Creation Master", icon: Database },
+        {
+            name: "Dashboard Overview",
+            path: "/dashboard",
+            icon: LayoutDashboard,
+            description: "Analytics & recent activity",
+        },
+        {
+            name: "Create Tender",
+            path: "/create-tender",
+            icon: FilePlus2,
+            description: "Limited, GeM ATC, e-Tender",
+        },
+        {
+            name: "My Tenders",
+            path: "/my-tenders",
+            icon: FolderKanban,
+            description: "Documents & saved versions",
+        },
+        {
+            name: "Master Terms & Clauses",
+            path: "/master-repository",
+            icon: ScrollText,
+            description: "Shared repository & custom clauses",
+        },
     ];
 
+    if (isSuperAdmin) {
+        navItems.push({
+            name: "Super Admin Console",
+            path: "/admin-console",
+            icon: ShieldAlert,
+            description: "Global search & user oversight",
+            badge: "ADMIN",
+        });
+    }
+
+    const getInitials = (name) => {
+        if (!name) return "HP";
+        return name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase();
+    };
+
     return (
-        <div className="w-64 bg-slate-900 text-white flex flex-col h-screen fixed left-0 top-0 overflow-y-auto z-10">
-            <div className="p-6 border-b border-slate-800">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20">
-                        <CheckSquare className="w-6 h-6 text-white" />
+        <>
+            {/* Mobile overlay */}
+            {isOpen && (
+                <div
+                    onClick={onClose}
+                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+                />
+            )}
+
+            <aside
+                className={`fixed top-0 bottom-0 left-0 z-50 w-72 bg-white/95 backdrop-blur-2xl border-r border-purple-100 shadow-xl shadow-purple-900/5 flex flex-col justify-between transition-transform duration-300 ease-in-out ${
+                    isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+                }`}
+            >
+                {/* 1. Top Brand Header */}
+                <div>
+                    <div className="p-5 border-b border-purple-100/80">
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-white shadow-md shadow-purple-500/10 border border-purple-100 p-2 flex items-center justify-center ring-4 ring-purple-500/5 shrink-0">
+                                <img
+                                    src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg"
+                                    alt="HPU"
+                                    className="w-full h-full object-contain"
+                                />
+                            </div>
+                            <div className="overflow-hidden">
+                                <h1 className="text-sm font-black text-slate-900 tracking-tight truncate flex items-center gap-1.5">
+                                    H.P. University
+                                </h1>
+                                <p className="text-[11px] text-purple-700 font-bold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse" />
+                                    Tender Portal
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="font-bold text-lg tracking-tight">TenderGen</h1>
-                        <p className="text-xs text-slate-400">Pro Suite</p>
+
+                    {/* 2. Navigation Links */}
+                    <div className="p-3 space-y-1.5 mt-2">
+                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Workspace Menu
+                        </div>
+                        {navItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <NavLink
+                                    key={item.path}
+                                    to={item.path}
+                                    onClick={onClose}
+                                    className={({ isActive }) =>
+                                        `group relative flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-semibold transition-all duration-200 ${
+                                            isActive
+                                                ? "bg-gradient-to-r from-purple-50 to-indigo-50/60 text-purple-800 border border-purple-200/80 shadow-md shadow-purple-500/5 font-bold"
+                                                : "text-slate-600 hover:text-purple-700 hover:bg-purple-50/50 border border-transparent"
+                                        }`
+                                    }
+                                >
+                                    {({ isActive }) => (
+                                        <>
+                                            <Icon
+                                                className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                                                    isActive ? "text-purple-700" : "text-slate-400 group-hover:text-purple-600"
+                                                }`}
+                                            />
+                                            <div className="flex-1 overflow-hidden text-left">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="truncate">
+                                                        {item.name}
+                                                    </span>
+                                                    {item.badge && (
+                                                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-purple-100 text-purple-800 border border-purple-200">
+                                                            {item.badge}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 truncate mt-0.5 font-normal">
+                                                    {item.description}
+                                                </p>
+                                            </div>
+                                            {isActive && (
+                                                <div className="w-1.5 h-6 rounded-full bg-gradient-to-b from-purple-600 to-indigo-600 absolute right-2" />
+                                            )}
+                                        </>
+                                    )}
+                                </NavLink>
+                            );
+                        })}
                     </div>
                 </div>
-            </div>
 
-            <nav className="flex-1 p-4 space-y-2">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive(item.path)
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-900/20"
-                                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                            }`}
-                    >
-                        <item.icon
-                            className={`w-5 h-5 ${isActive(item.path)
-                                    ? "text-white"
-                                    : "text-slate-500 group-hover:text-white"
-                                }`}
-                        />
-                        <span className="font-medium">{item.label}</span>
-                    </Link>
-                ))}
-            </nav>
+                {/* 3. Bottom User Profile & Logout */}
+                <div className="p-3 border-t border-purple-100 bg-purple-50/30">
+                    <div className="p-3 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                isSuperAdmin 
+                                    ? "bg-purple-100 text-purple-800 border border-purple-200" 
+                                    : "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                            }`}>
+                                {getInitials(user?.fullName)}
+                            </div>
+                            <div className="overflow-hidden text-left">
+                                <div className="flex items-center gap-1">
+                                    <p className="text-xs font-bold text-slate-900 truncate">
+                                        {user?.fullName || "Faculty User"}
+                                    </p>
+                                    {isSuperAdmin && (
+                                        <Shield className="w-3 h-3 text-purple-600 shrink-0" />
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-slate-500 truncate">
+                                    {user?.departmentName || "Department of Physics"}
+                                </p>
+                            </div>
+                        </div>
 
-            <div className="p-4 border-t border-slate-800">
-                <div className="bg-slate-800/50 rounded-lg p-4">
-                    <p className="text-xs text-slate-400 mb-2">Storage Used</p>
-                    <div className="w-full bg-slate-700 h-1.5 rounded-full mb-2">
-                        <div className="bg-blue-500 h-1.5 rounded-full w-3/4"></div>
+                        <button
+                            onClick={handleLogout}
+                            title="Sign Out"
+                            className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     </div>
-                    <p className="text-xs text-slate-500">75% of 1GB used</p>
                 </div>
-            </div>
-        </div>
+            </aside>
+        </>
     );
-};
-
-export default Sidebar;
+}
