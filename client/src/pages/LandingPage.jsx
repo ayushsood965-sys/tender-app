@@ -83,7 +83,7 @@ export default function LandingPage() {
                         </div>
                         <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-medium text-slate-700">
                             <ShieldCheck className="w-4 h-4 text-purple-600" />
-                            <span>GFR 2017 Compliant Exports</span>
+                            <span>HPFR 2009 Compliant</span>
                         </div>
                     </div>
 
