@@ -69,18 +69,13 @@ def generate_pdf_from_json(input_json_path, output_pdf_path, logo_path, watermar
     custom_css = f"""
     @page {{
         size: a4 portrait;
-        margin: 8mm 8mm 12mm 8mm;
-        @frame content_frame {{
-            left: 8mm;
-            top: 8mm;
-            width: 194mm;
-            height: 275mm;
-        }}
+        margin: 10mm 10mm 16mm 10mm;
         @frame footer_frame {{
-            left: 8mm;
-            top: 284mm;
-            width: 194mm;
-            height: 6mm;
+            -pdf-frame-content: footerContent;
+            bottom: 4mm;
+            left: 10mm;
+            right: 10mm;
+            height: 12mm;
         }}
     }}
     body {{
@@ -145,7 +140,7 @@ def generate_pdf_from_json(input_json_path, output_pdf_path, logo_path, watermar
         margin-bottom: 4pt;
         line-height: 1.35;
     }}
-    .footer-num {{
+    #footerContent {{
         text-align: right;
         font-weight: bold;
         font-size: 8.5pt;
@@ -189,7 +184,7 @@ def generate_pdf_from_json(input_json_path, output_pdf_path, logo_path, watermar
         </style>
     </head>
     <body>
-        <div id="footer_content" class="footer-num">
+        <div id="footerContent">
             Page <pdf:pagenumber> of <pdf:pagecount>
         </div>
         {body_html}
