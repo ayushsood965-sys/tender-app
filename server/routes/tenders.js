@@ -81,6 +81,33 @@ router.post("/", optionalAuth, async (req, res) => {
     }
 });
 
+// Duplicate / Clone Tender
+router.post("/:id/duplicate", optionalAuth, async (req, res) => {
+    try {
+        const originalTender = await Tender.findOne({ id: parseInt(req.params.id) });
+        if (!originalTender) return res.status(404).json({ error: "Tender not found" });
+
+        const originalObj = originalTender.toObject();
+        delete originalObj._id;
+        delete originalObj.__v;
+
+        const duplicatedTender = new Tender({
+            ...originalObj,
+            id: Date.now(),
+            tenderName: `${originalTender.tenderName} (Copy)`,
+            tenderNo: `${originalTender.tenderNo}-COPY`,
+            userId: req.user ? req.user.id : originalTender.userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+
+        await duplicatedTender.save();
+        res.json(duplicatedTender);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Update Tender (Creator or Superadmin only)
 router.put("/:id", optionalAuth, async (req, res) => {
     try {

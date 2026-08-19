@@ -1251,6 +1251,20 @@ const seedDB = async () => {
     await superAdmin.save();
     console.log("   ✅ Superadmin created: admin@hpuniv.ac.in (Password: Admin@123)");
 
+    const demoUser = new User({
+      id: 1002,
+      fullName: "Dr. Rohit Sharma",
+      email: "rohit.physics@hpuniv.ac.in",
+      departmentName: "Department of Physics",
+      phone: "9816123456",
+      designation: "Assistant Professor",
+      dob: "1990-05-15",
+      password: "Password@123", // Will be automatically hashed by UserSchema pre-save hook
+      role: "user",
+    });
+    await demoUser.save();
+    console.log("   ✅ Demo User created: rohit.physics@hpuniv.ac.in (Password: Password@123)");
+
     console.log("🌱 Seeding Categories (Master)...");
     const masterCategories = categories.map(c => ({
       ...c,

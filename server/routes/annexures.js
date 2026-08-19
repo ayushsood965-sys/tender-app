@@ -171,7 +171,7 @@ router.post("/upload", optionalAuth, upload.single("file"), async (req, res) => 
     }
 });
 
-// 5. Update Annexure
+// 5. Update Annexure with Version Tracking
 router.put("/:id", optionalAuth, async (req, res) => {
     try {
         const annexure = await Annexure.findOne({ id: parseInt(req.params.id) });
@@ -182,9 +182,25 @@ router.put("/:id", optionalAuth, async (req, res) => {
             return res.status(403).json({ error: "System Master annexures can only be edited by Super Admin." });
         }
 
+        // Archive previous version in history if contentTemplate changed
+        const historyEntry = {
+            version: annexure.version || 1,
+            contentTemplate: annexure.contentTemplate,
+            updatedAt: new Date(),
+            updatedByName: req.user ? req.user.fullName : "User",
+            changelog: req.body.changelog || `Updated on ${new Date().toLocaleDateString()}`,
+        };
+
+        const updatedVersion = (annexure.version || 1) + 1;
+
         const updated = await Annexure.findOneAndUpdate(
             { id: parseInt(req.params.id) },
-            req.body,
+            {
+                ...req.body,
+                version: updatedVersion,
+                updatedAt: new Date(),
+                $push: { history: historyEntry }
+            },
             { new: true }
         );
 
@@ -200,6 +216,39 @@ router.put("/:id", optionalAuth, async (req, res) => {
         }
 
         res.json(updated);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5b. Toggle Deprecate Status
+router.patch("/:id/deprecate", optionalAuth, async (req, res) => {
+    try {
+        const annexure = await Annexure.findOne({ id: parseInt(req.params.id) });
+        if (!annexure) return res.status(404).json({ error: "Annexure not found" });
+
+        const newStatus = annexure.status === "deprecated" ? "active" : "deprecated";
+        annexure.status = newStatus;
+        annexure.updatedAt = new Date();
+        await annexure.save();
+
+        res.json({ message: `Annexure status updated to ${newStatus}`, annexure });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5c. Get Version History
+router.get("/:id/history", async (req, res) => {
+    try {
+        const annexure = await Annexure.findOne({ id: parseInt(req.params.id) });
+        if (!annexure) return res.status(404).json({ error: "Annexure not found" });
+
+        res.json({
+            currentVersion: annexure.version || 1,
+            currentTemplate: annexure.contentTemplate,
+            history: annexure.history || []
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

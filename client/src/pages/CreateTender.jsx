@@ -26,11 +26,14 @@ import {
     X,
     Sparkles,
     CheckCircle2,
+    Search,
+    Sliders,
 } from "lucide-react";
 import {
     fetchDashboardData,
     fetchAnnexures,
     createTender,
+    fetchAIRecommendation,
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { numberToIndianWords } from "../utils/numberToWords";
@@ -46,6 +49,42 @@ const CreateTender = () => {
     const [activeCategoryFilter, setActiveCategoryFilter] = useState(null);
     const [activeAnnexCategoryFilter, setActiveAnnexCategoryFilter] = useState(null);
     const [previewAnnexure, setPreviewAnnexure] = useState(null);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiRecommendation, setAiRecommendation] = useState(null);
+    const [termSearchQuery, setTermSearchQuery] = useState("");
+
+    const handleAiRecommend = async () => {
+        if (!formData.tenderName.trim()) {
+            alert("Please enter a Tender / Procurement Title first so the AI can analyze your requirements.");
+            return;
+        }
+        setAiLoading(true);
+        try {
+            const result = await fetchAIRecommendation({
+                tenderName: formData.tenderName,
+                documentType: formData.documentType,
+                tenderCategory: formData.tenderCategory,
+                estimatedCost: formData.estimatedCost,
+                departmentName: formData.departmentName,
+            });
+
+            setAiRecommendation(result);
+            setFormData(prev => {
+                const combinedTerms = Array.from(new Set([...prev.selectedTermIds, ...(result.recommendedTermIds || [])]));
+                const combinedAnnex = Array.from(new Set([...prev.selectedAnnexureIds, ...(result.recommendedAnnexureIds || [])]));
+                return {
+                    ...prev,
+                    selectedTermIds: combinedTerms,
+                    selectedAnnexureIds: combinedAnnex,
+                };
+            });
+        } catch (err) {
+            console.error("AI recommendation error:", err);
+            alert("AI recommendation failed: " + err.message);
+        } finally {
+            setAiLoading(false);
+        }
+    };
 
     const DOCUMENT_TYPES = [
         {
@@ -111,19 +150,10 @@ const CreateTender = () => {
         warrantyConsumable: "6 months",
         courtJurisdiction: "Courts in Shimla Urban",
         selectedTermIds: [],
-        isAnnexureRequired: true,
-        selectedAnnexureIds: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14],
+        isAnnexureRequired: false,
+        selectedAnnexureIds: [],
         itemsList: [
-            { srNo: 1, name: "Table Tennis Table", specs: "22mm Top with 75mm Wheel Size, TTFI approved", quantity: "3" },
-            { srNo: 2, name: "Table Tennis Bat", specs: "Tournament Grade, Flared Grip, Ratings: Speed 70, Spin 70, Control 95", quantity: "12" },
-            { srNo: 3, name: "Badminton Racket", specs: "Carbon material, Lightweight design", quantity: "10" },
-            { srNo: 4, name: "Carrom Board", specs: "12mm Ply, 35\" Overall frame, 29\" Playing area, 3\" hand rest, with stand", quantity: "5" },
-            { srNo: 5, name: "Chess Board", specs: "Foldable 19\"x19\" board with wooden chessmen", quantity: "7" },
-            { srNo: 6, name: "Table Tennis Balls", specs: "3-Star standard, Pack of 3", quantity: "4" },
-            { srNo: 7, name: "Badminton Shuttle Cock", specs: "Nylon material, Standard tournament grade", quantity: "8" },
-            { srNo: 8, name: "Cricket Bat", specs: "Kashmir Willow", quantity: "4" },
-            { srNo: 9, name: "Volley Ball", specs: "Leather material", quantity: "2" },
-            { srNo: 10, name: "Foot Ball", specs: "Rubberised material, standard match quality", quantity: "2" },
+            { srNo: 1, name: "", specs: "", quantity: "1" }
         ],
         variables: {},
     });
@@ -151,27 +181,6 @@ const CreateTender = () => {
             setTerms(data.terms || []);
             const annexData = await fetchAnnexures();
             setAnnexures(annexData || []);
-
-            // Preselect default terms and annexures if not set
-            if (data.terms && data.terms.length > 0) {
-                const initialSelectedTerms = data.terms.filter((t) => t.mandatory).map((t) => t.id);
-                setFormData((prev) => {
-                    const selectedTermIds = prev.selectedTermIds.length > 0 ? prev.selectedTermIds : initialSelectedTerms.slice(0, 15);
-                    
-                    // Derive mandatory annexures from selected terms
-                    const mandatoryAnnexIds = data.terms
-                        .filter((t) => selectedTermIds.includes(t.id) && t.hasAnnexure && t.annexureId)
-                        .map((t) => t.annexureId);
-
-                    const combinedAnnexIds = Array.from(new Set([...prev.selectedAnnexureIds, ...mandatoryAnnexIds]));
-
-                    return {
-                        ...prev,
-                        selectedTermIds,
-                        selectedAnnexureIds: combinedAnnexIds,
-                    };
-                });
-            }
         } catch (error) {
             console.error("Failed to load data", error);
         } finally {
@@ -219,21 +228,16 @@ const CreateTender = () => {
 
     const handleDocTypeSelect = (typeId) => {
         let defaultTenderType = "gem";
-        let defaultAnnexIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-
         if (typeId === "Limited Tender Document") {
             defaultTenderType = "limited";
-            defaultAnnexIds = [1, 14];
         } else if (typeId === "e-tender Document") {
             defaultTenderType = "etender";
-            defaultAnnexIds = [4, 13, 14, 15];
         }
 
         setFormData((prev) => ({
             ...prev,
             documentType: typeId,
             tenderType: defaultTenderType,
-            selectedAnnexureIds: defaultAnnexIds,
         }));
     };
 
@@ -320,6 +324,44 @@ const CreateTender = () => {
     const mandatoryAnnexureIds = terms
         .filter((t) => formData.selectedTermIds.includes(t.id) && t.hasAnnexure && t.annexureId)
         .map((t) => t.annexureId);
+
+    // Detect custom dynamic variables / placeholders in selected terms
+    const getDetectedPlaceholders = () => {
+        const selectedTermsList = terms.filter((t) => (formData.selectedTermIds || []).includes(t.id));
+        const placeholderMap = new Map(); // placeholderKey -> array of term titles using it
+
+        selectedTermsList.forEach((term) => {
+            const textToScan = `${term.title || ""} ${term.description || ""}`;
+            const matches = textToScan.match(/\{\{([^}]+)\}\}/g) || [];
+            matches.forEach((m) => {
+                const rawKey = m.replace(/^\{\{|\}\}$/g, "").trim();
+                // Exclude system global constants
+                if (rawKey && rawKey !== "itemsTable") {
+                    if (!placeholderMap.has(rawKey)) {
+                        placeholderMap.set(rawKey, []);
+                    }
+                    if (!placeholderMap.get(rawKey).includes(term.title)) {
+                        placeholderMap.get(rawKey).push(term.title);
+                    }
+                }
+            });
+        });
+
+        return Array.from(placeholderMap.entries()).map(([key, usedInTerms]) => ({
+            key,
+            usedInTerms,
+        }));
+    };
+
+    const handleVariableChange = (key, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            variables: {
+                ...prev.variables,
+                [key]: value,
+            },
+        }));
+    };
 
     useEffect(() => {
         const typeParam = searchParams.get("type");
@@ -867,91 +909,365 @@ const CreateTender = () => {
                     </div>
                 )}
 
-                {/* 6. TERMS & CONDITIONS MAPPING */}
+                {/* 6. TERMS & CONDITIONS MAPPING - TWO COLUMN SELECTION WITH SEARCH */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                    <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-4 border-b border-slate-100">
                         <div>
                             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <ShieldCheck className="w-5 h-5 text-blue-600" /> Terms & Conditions Mapping
+                                <ShieldCheck className="w-5 h-5 text-indigo-600" /> Terms & Conditions Selection
                             </h2>
-                            <p className="text-xs text-slate-500 mt-0.5">Select clauses to include in your document.</p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                Browse clause categories on the left and select applicable clauses on the right.
+                            </p>
                         </div>
-                        <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100">
-                            {formData.selectedTermIds.length} Clauses Selected
-                        </span>
+                        <div className="flex items-center gap-2.5">
+                            <button
+                                type="button"
+                                onClick={handleAiRecommend}
+                                disabled={aiLoading}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-70 cursor-pointer"
+                            >
+                                {aiLoading ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                )}
+                                {aiLoading ? "Analyzing Procurement..." : "AI Auto-Select Clauses"}
+                            </button>
+                            <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3.5 py-1.5 rounded-xl border border-indigo-100 shadow-xs">
+                                {formData.selectedTermIds.length} Selected
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1 pb-3">
-                        <button
-                            type="button"
-                            onClick={() => setActiveCategoryFilter(null)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                                activeCategoryFilter === null
-                                    ? "bg-slate-900 text-white"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                        >
-                            All Categories ({terms.length})
-                        </button>
-                        {categories.map((cat) => (
+                    {/* TOP SEARCH BAR */}
+                    <div className="flex items-center gap-2.5">
+                        <div className="relative flex-1">
+                            <Search className="w-4 h-4 text-indigo-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                value={termSearchQuery}
+                                onChange={(e) => setTermSearchQuery(e.target.value)}
+                                placeholder="Search clauses by keyword, title, or description (e.g. Warranty, EMD, Inspection, MAF, Delivery)..."
+                                className="w-full pl-10 pr-10 py-2.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400 font-medium"
+                            />
+                            {termSearchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTermSearchQuery("")}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        {termSearchQuery && (
                             <button
-                                key={cat.id}
                                 type="button"
-                                onClick={() => setActiveCategoryFilter(cat.id)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                    activeCategoryFilter === cat.id
-                                        ? "bg-purple-600 text-white shadow-sm"
-                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                onClick={() => setTermSearchQuery("")}
+                                className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+
+                    {/* AI Recommendation Rationale Box */}
+                    {aiRecommendation && (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200 animate-in fade-in duration-300">
+                            <div className="flex justify-between items-start mb-1.5">
+                                <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                                    <Sparkles className="w-4 h-4 text-purple-600" /> AI Procurement Analysis ({aiRecommendation.source || "OpenRouter Nemotron"})
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setAiRecommendation(null)}
+                                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                                {aiRecommendation.rationale}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* TWO COLUMN INTERACTION CONTAINER */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                        {/* COLUMN 1: SIDEBAR OF CATEGORIES */}
+                        <div className="md:col-span-4 lg:col-span-4 space-y-2 bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200">
+                            <div className="flex justify-between items-center px-2 py-1 mb-1">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Categories
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                    {categories.length} total
+                                </span>
+                            </div>
+
+                            {/* "All Categories" Item */}
+                            <button
+                                type="button"
+                                onClick={() => setActiveCategoryFilter(null)}
+                                className={`w-full text-left p-3 rounded-xl transition-all cursor-pointer flex items-center justify-between border ${
+                                    activeCategoryFilter === null
+                                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                        : "bg-white text-slate-700 hover:bg-indigo-50/50 hover:text-indigo-900 border-slate-200/80"
                                 }`}
                             >
-                                {cat.name}
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <Layers className={`w-4 h-4 flex-shrink-0 ${activeCategoryFilter === null ? "text-indigo-200" : "text-slate-400"}`} />
+                                    <span className="text-xs font-bold truncate">All Categories</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {formData.selectedTermIds.length > 0 && (
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                            activeCategoryFilter === null ? "bg-indigo-500 text-white" : "bg-purple-100 text-purple-800"
+                                        }`}>
+                                            {formData.selectedTermIds.length} sel
+                                        </span>
+                                    )}
+                                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                                        activeCategoryFilter === null ? "bg-indigo-700/60 text-indigo-100" : "bg-slate-100 text-slate-500"
+                                    }`}>
+                                        {terms.length}
+                                    </span>
+                                </div>
                             </button>
-                        ))}
-                    </div>
 
-                    <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-                        {terms
-                            .filter((t) => activeCategoryFilter === null || t.categoryId === activeCategoryFilter)
-                            .map((term) => {
-                                const isSelected = formData.selectedTermIds.includes(term.id);
+                            {/* Individual Categories */}
+                            <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
+                                {categories.map((cat) => {
+                                    const catTerms = terms.filter((t) => t.categoryId === cat.id);
+                                    const selectedInCat = catTerms.filter((t) => formData.selectedTermIds.includes(t.id)).length;
+                                    const isActive = activeCategoryFilter === cat.id;
+
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => setActiveCategoryFilter(cat.id)}
+                                            className={`w-full text-left p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between border ${
+                                                isActive
+                                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                                    : "bg-white text-slate-700 hover:bg-indigo-50/50 hover:text-indigo-900 border-slate-200/80"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                                    selectedInCat > 0 ? (isActive ? "bg-green-300" : "bg-emerald-500") : (isActive ? "bg-indigo-300" : "bg-slate-300")
+                                                }`} />
+                                                <span className="text-xs font-semibold truncate">{cat.name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                {selectedInCat > 0 && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                                                        isActive ? "bg-indigo-500 text-white" : "bg-emerald-100 text-emerald-800"
+                                                    }`}>
+                                                        <CheckCircle2 size={10} /> {selectedInCat}
+                                                    </span>
+                                                )}
+                                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                                                    isActive ? "bg-indigo-700/60 text-indigo-100" : "bg-slate-100 text-slate-500"
+                                                }`}>
+                                                    {catTerms.length}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* COLUMN 2: TERMS / CLAUSES CHECKBOX LIST */}
+                        <div className="md:col-span-8 lg:col-span-8 space-y-3">
+                            {/* Active Category Header & Bulk Selection Tools */}
+                            {(() => {
+                                const q = termSearchQuery.trim().toLowerCase();
+                                const filteredTerms = terms.filter((t) => {
+                                    const matchesCat = activeCategoryFilter === null || t.categoryId === activeCategoryFilter;
+                                    if (!q) return matchesCat;
+                                    const matchesSearch =
+                                        (t.title && t.title.toLowerCase().includes(q)) ||
+                                        (t.description && t.description.toLowerCase().includes(q)) ||
+                                        (t.categoryName && t.categoryName.toLowerCase().includes(q)) ||
+                                        String(t.id).includes(q);
+                                    return matchesCat && matchesSearch;
+                                });
+
                                 return (
-                                    <div
-                                        key={term.id}
-                                        onClick={() => toggleTermSelection(term.id)}
-                                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
-                                            isSelected
-                                                ? "border-purple-300 bg-purple-50/50 shadow-xs"
-                                                : "border-slate-200 hover:border-slate-300 bg-white"
-                                        }`}
-                                    >
-                                        <div className="mt-0.5">
-                                            {isSelected ? (
-                                                <CheckSquare className="w-4 h-4 text-purple-600" />
+                                    <>
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-slate-800">
+                                                    {activeCategoryFilter === null
+                                                        ? "All Clauses"
+                                                        : categories.find((c) => c.id === activeCategoryFilter)?.name || "Category Clauses"}
+                                                </span>
+                                                <span className="text-[11px] text-slate-500 font-medium">
+                                                    ({filteredTerms.length} available{termSearchQuery ? " matching search" : ""})
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const visibleIds = filteredTerms.map((t) => t.id);
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            selectedTermIds: Array.from(new Set([...prev.selectedTermIds, ...visibleIds])),
+                                                        }));
+                                                    }}
+                                                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                                >
+                                                    Select All Visible
+                                                </button>
+                                                <span className="text-slate-300">|</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const visibleIdSet = new Set(filteredTerms.map((t) => t.id));
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            selectedTermIds: prev.selectedTermIds.filter((id) => !visibleIdSet.has(id)),
+                                                        }));
+                                                    }}
+                                                    className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                                                >
+                                                    Deselect All Visible
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Terms Cards Scrollable List */}
+                                        <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+                                            {filteredTerms.length === 0 ? (
+                                                <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                                    <p className="text-xs font-semibold text-slate-500">
+                                                        No clauses found matching "{termSearchQuery}".
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTermSearchQuery("")}
+                                                        className="mt-2 text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                                                    >
+                                                        Clear search filter
+                                                    </button>
+                                                </div>
                                             ) : (
-                                                <Square className="w-4 h-4 text-slate-300" />
+                                                filteredTerms.map((term) => {
+                                                    const isSelected = formData.selectedTermIds.includes(term.id);
+                                                    return (
+                                                        <div
+                                                            key={term.id}
+                                                            onClick={() => toggleTermSelection(term.id)}
+                                                            className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5 ${
+                                                                isSelected
+                                                                    ? "border-indigo-400 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-200"
+                                                                    : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50/60 bg-white"
+                                                            }`}
+                                                        >
+                                                            <div className="mt-0.5 flex-shrink-0">
+                                                                {isSelected ? (
+                                                                    <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                                                ) : (
+                                                                    <Square className="w-4 h-4 text-slate-300" />
+                                                                )}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                                    <span className="text-xs font-bold text-slate-900">{term.title}</span>
+                                                                    {term.mandatory && (
+                                                                        <span className="text-[10px] bg-red-50 text-red-700 font-bold px-2 py-0.5 rounded border border-red-100">
+                                                                            Mandatory
+                                                                        </span>
+                                                                    )}
+                                                                    {term.hasAnnexure && (
+                                                                        <span className="text-[10px] bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-100">
+                                                                            <Paperclip className="w-2.5 h-2.5 text-purple-600" /> Annexure Linked
+                                                                        </span>
+                                                                    )}
+                                                                    {activeCategoryFilter === null && term.categoryName && (
+                                                                        <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">
+                                                                            {term.categoryName}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-slate-600 leading-relaxed">{term.description}</p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
                                             )}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-xs font-bold text-slate-800">{term.title}</span>
-                                                {term.mandatory && (
-                                                    <span className="text-[10px] bg-red-100 text-red-700 font-bold px-1.5 py-0.2 rounded">
-                                                        Mandatory
-                                                    </span>
-                                                )}
-                                                {term.hasAnnexure && (
-                                                    <span className="text-[10px] bg-purple-100 text-purple-800 font-semibold px-2 py-0.2 rounded-full flex items-center gap-1 border border-purple-200">
-                                                        <Paperclip className="w-2.5 h-2.5" /> Annexure Linked
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{term.description}</p>
-                                        </div>
-                                    </div>
+                                    </>
                                 );
-                            })}
+                            })()}
+                        </div>
                     </div>
                 </div>
+
+                {/* 6.1 DYNAMIC CLAUSE PLACEHOLDERS & CUSTOM VARIABLES */}
+                {(() => {
+                    const detectedPlaceholders = getDetectedPlaceholders();
+                    if (detectedPlaceholders.length === 0) return null;
+
+                    return (
+                        <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/50 to-white p-6 rounded-2xl border border-indigo-200 shadow-sm space-y-4 animate-in fade-in duration-300">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-indigo-100">
+                                <div>
+                                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                                        <Sliders className="w-5 h-5 text-indigo-600" /> Clause Dynamic Variables & Placeholders
+                                    </h2>
+                                    <p className="text-xs text-slate-600 mt-0.5">
+                                        The terms and conditions selected above contain dynamic placeholders enclosed in <code className="bg-indigo-100/80 text-indigo-800 px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">{"{{...}}"}</code>. Enter the custom values below to populate them directly into your tender document.
+                                    </p>
+                                </div>
+                                <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200 shadow-xs flex items-center gap-1 self-start sm:self-auto">
+                                    <Sparkles className="w-3 h-3 text-indigo-600" /> {detectedPlaceholders.length} Variable{detectedPlaceholders.length > 1 ? "s" : ""} Detected
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                                {detectedPlaceholders.map(({ key, usedInTerms }) => {
+                                    const val = formData.variables?.[key] !== undefined ? formData.variables[key] : "";
+                                    const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+                                    return (
+                                        <div
+                                            key={key}
+                                            className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs space-y-2 hover:border-indigo-300 transition-all"
+                                        >
+                                            <div className="flex items-center justify-between gap-1">
+                                                <label className="block text-xs font-bold text-slate-800 truncate" title={key}>
+                                                    {label}
+                                                </label>
+                                                <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold">
+                                                    {"{{" + key + "}}"}
+                                                </span>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={val}
+                                                onChange={(e) => handleVariableChange(key, e.target.value)}
+                                                placeholder={`Enter ${label.toLowerCase()}...`}
+                                                className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-100 outline-none transition-all font-medium"
+                                            />
+                                            <div
+                                                className="flex items-center gap-1 text-[11px] text-slate-500 pt-0.5 truncate"
+                                                title={`Used in: ${usedInTerms.join(", ")}`}
+                                            >
+                                                <span className="font-semibold text-slate-400">Used in:</span>
+                                                <span className="truncate text-slate-600 font-medium">{usedInTerms.join(", ")}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* 7. IS ANNEXURE REQUIRED? & ANNEXURES SELECTION */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">

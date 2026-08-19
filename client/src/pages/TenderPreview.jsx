@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw, Paperclip } from 'lucide-react';
+import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw, Paperclip, Download, FileDown, Package, FileText } from 'lucide-react';
 import {
     fetchTender,
     fetchDashboardData,
     fetchAnnexures,
     fetchSavedDocument,
     saveDocument,
-    updateSavedDocument
+    updateSavedDocument,
+    API_URL
 } from '../services/api';
 
 // A4 Page Layout Component with contentEditable support, watermark, and X/Y page numbering
@@ -135,21 +136,10 @@ const TenderPreview = () => {
         const pbgFormatted = tender.pbgAmount ? Number(tender.pbgAmount).toLocaleString("en-IN") : (tender.pbgRequired || "10,000");
         const pbgWords = tender.pbgAmountWords || "Rupees Ten Thousand Only";
 
-        const items = (tender.itemsList && tender.itemsList.length > 0) ? tender.itemsList : [
-            { srNo: 1, name: "Table Tennis Table", specs: "22mm Top with 75mm Wheel Size, TTFI approved", quantity: "3" },
-            { srNo: 2, name: "Table Tennis Bat", specs: "Tournament Grade, Flared Grip, Ratings: Speed 70, Spin 70, Control 95", quantity: "12" },
-            { srNo: 3, name: "Badminton Racket", specs: "Carbon material, Lightweight design", quantity: "10" },
-            { srNo: 4, name: "Carrom Board", specs: "12mm Ply, 35\" Overall frame, 29\" Playing area, 3\" hand rest, with stand", quantity: "5" },
-            { srNo: 5, name: "Chess Board", specs: "Foldable 19\"x19\" board with wooden chessmen", quantity: "7" },
-            { srNo: 6, name: "Table Tennis Balls", specs: "3-Star standard, Pack of 3", quantity: "4" },
-            { srNo: 7, name: "Badminton Shuttle Cock", specs: "Nylon material, Standard tournament grade", quantity: "8" },
-            { srNo: 8, name: "Cricket Bat", specs: "Kashmir Willow", quantity: "4" },
-            { srNo: 9, name: "Volley Ball", specs: "Leather material", quantity: "2" },
-            { srNo: 10, name: "Foot Ball", specs: "Rubberised material, standard match quality", quantity: "2" },
-        ];
+        const items = (tender.itemsList && Array.isArray(tender.itemsList)) ? tender.itemsList.filter(it => it.name && it.name.trim()) : [];
 
         // Items Table HTML for Financial Bid Annexure
-        const itemsRowsHtml = items.map((item, idx) => `
+        const itemsRowsHtml = items.length > 0 ? items.map((item, idx) => `
             <tr>
                 <td style="border: 1px solid black; padding: 5px 8px; text-align: center;">${idx + 1}.</td>
                 <td style="border: 1px solid black; padding: 5px 8px; font-weight: 600;">${item.name || ""}</td>
@@ -159,7 +149,17 @@ const TenderPreview = () => {
                 <td style="border: 1px solid black; padding: 5px 8px;"></td>
                 <td style="border: 1px solid black; padding: 5px 8px;"></td>
             </tr>
-        `).join("");
+        `).join("") : `
+            <tr>
+                <td style="border: 1px solid black; padding: 8px; text-align: center;">1.</td>
+                <td style="border: 1px solid black; padding: 8px; font-style: italic; color: #555;">As per Detailed Technical Specifications / Scope of Work</td>
+                <td style="border: 1px solid black; padding: 8px; font-style: italic; color: #555;">Conforming to required specifications</td>
+                <td style="border: 1px solid black; padding: 8px; text-align: center; font-weight: 700;">${tender.itemQuantity || "1 Lot"}</td>
+                <td style="border: 1px solid black; padding: 8px;"></td>
+                <td style="border: 1px solid black; padding: 8px;"></td>
+                <td style="border: 1px solid black; padding: 8px;"></td>
+            </tr>
+        `;
 
         const generatedItemsTable = `
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">
@@ -209,12 +209,16 @@ const TenderPreview = () => {
                 bidEndDate: formatDate(tender.bidEndDate),
                 techEvalDate: formatDate(tender.techEvalDate),
                 itemsTable: generatedItemsTable,
-                ...variables,
+                ...(tender.variables || {}),
+                ...(variables || {}),
             };
 
+            const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
             Object.keys(map).forEach(key => {
-                const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-                result = result.replace(regex, map[key] !== undefined ? map[key] : `{{${key}}}`);
+                const escaped = escapeRegExp(key);
+                const regex = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'gi');
+                result = result.replace(regex, (map[key] !== undefined && map[key] !== "") ? map[key] : `{{${key}}}`);
             });
             return result;
         };
@@ -709,6 +713,38 @@ const TenderPreview = () => {
                 >
                     <Plus size={16} /> Add Page
                 </button>
+
+                <div className="h-6 w-px bg-slate-200 mx-1"></div>
+
+                {/* Export Actions */}
+                {savedId && (
+                    <div className="flex items-center gap-2">
+                        <a
+                            href={`${API_URL}/documents/${savedId}/pdf`}
+                            download
+                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Download Printable PDF"
+                        >
+                            <FileDown size={14} /> PDF
+                        </a>
+                        <a
+                            href={`${API_URL}/documents/${savedId}/docx`}
+                            download
+                            className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Download Word DOCX"
+                        >
+                            <FileText size={14} /> Word
+                        </a>
+                        <a
+                            href={`${API_URL}/documents/${savedId}/export-package?profile=${isLimited || isETender ? "two_cover" : "gem"}`}
+                            download
+                            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Export Portal Multi-Cover ZIP Archive"
+                        >
+                            <Package size={14} /> {isLimited || isETender ? "Two-Cover ZIP" : "GeM ZIP"}
+                        </a>
+                    </div>
+                )}
 
                 <div className="h-6 w-px bg-slate-200 mx-1"></div>
 

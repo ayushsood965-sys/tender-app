@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const SavedDocument = require("../models/SavedDocument");
 const { optionalAuth } = require("../middleware/auth");
-const { execFile } = require("child_process");
+const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -81,24 +81,129 @@ router.get("/:id/docx", async (req, res) => {
         }), "utf-8");
 
         const pyScript = path.join(__dirname, "..", "docx_generator.py");
+        const cmd = `python "${pyScript}" "${jsonPath}" "${docxPath}"`;
 
-        execFile("python", [pyScript, jsonPath, docxPath], (err, stdout, stderr) => {
+        exec(cmd, (err, stdout, stderr) => {
             if (err) {
                 console.error("Python docx generator error:", err, stderr);
-                return res.status(500).json({ error: "Failed to generate DOCX: " + stderr });
+                try { if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath); } catch (e) {}
+                return res.status(500).json({ error: "Failed to generate DOCX: " + (stderr || err.message) });
             }
 
             const cleanName = (doc.name || "Tender_Document").replace(/[/\\?%*:|"<>]/g, "_").trim();
             const filename = `${cleanName}.docx`;
 
-            res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-
-            res.download(docxPath, filename, () => {
+            res.download(docxPath, filename, (downloadErr) => {
                 try {
                     if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
                     if (fs.existsSync(docxPath)) fs.unlinkSync(docxPath);
                 } catch (e) {}
+                if (downloadErr && !res.headersSent) {
+                    res.status(500).json({ error: downloadErr.message });
+                }
+            });
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export document as Direct PDF
+router.get("/:id/pdf", async (req, res) => {
+    try {
+        const doc = await SavedDocument.findOne({ id: parseInt(req.params.id) });
+        if (!doc) return res.status(404).json({ error: "Document not found" });
+
+        const orderedPages = Object.keys(doc.pages || {})
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .map(k => doc.pages[k]);
+
+        if (orderedPages.length === 0) {
+            return res.status(400).json({ error: "No pages found in this document" });
+        }
+
+        const tempDir = os.tmpdir();
+        const jsonPath = path.join(tempDir, `doc_${doc.id}_${Date.now()}.json`);
+        const pdfPath = path.join(tempDir, `doc_${doc.id}_${Date.now()}.pdf`);
+
+        fs.writeFileSync(jsonPath, JSON.stringify({
+            name: doc.name || "Tender_Document",
+            pages: orderedPages
+        }), "utf-8");
+
+        const pyScript = path.join(__dirname, "..", "pdf_generator.py");
+        const cmd = `python "${pyScript}" "${jsonPath}" "${pdfPath}"`;
+
+        exec(cmd, (err, stdout, stderr) => {
+            if (err) {
+                console.error("Python PDF generator error:", err, stderr);
+                try { if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath); } catch (e) {}
+                return res.status(500).json({ error: "Failed to generate PDF: " + (stderr || err.message) });
+            }
+
+            const cleanName = (doc.name || "Tender_Document").replace(/[/\\?%*:|"<>]/g, "_").trim();
+            const filename = `${cleanName}.pdf`;
+
+            res.download(pdfPath, filename, (downloadErr) => {
+                try {
+                    if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
+                    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+                } catch (e) {}
+                if (downloadErr && !res.headersSent) {
+                    res.status(500).json({ error: downloadErr.message });
+                }
+            });
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export document as Portal ZIP Package (e-Tender Two-Cover vs GeM ATC)
+router.get("/:id/export-package", async (req, res) => {
+    try {
+        const profile = req.query.profile || "two_cover"; // "two_cover" | "gem"
+        const doc = await SavedDocument.findOne({ id: parseInt(req.params.id) });
+        if (!doc) return res.status(404).json({ error: "Document not found" });
+
+        const orderedPages = Object.keys(doc.pages || {})
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .map(k => doc.pages[k]);
+
+        if (orderedPages.length === 0) {
+            return res.status(400).json({ error: "No pages found in this document" });
+        }
+
+        const tempDir = os.tmpdir();
+        const jsonPath = path.join(tempDir, `doc_${doc.id}_${Date.now()}.json`);
+        const zipPath = path.join(tempDir, `pkg_${doc.id}_${Date.now()}.zip`);
+
+        fs.writeFileSync(jsonPath, JSON.stringify({
+            name: doc.name || "Tender_Document",
+            pages: orderedPages
+        }), "utf-8");
+
+        const pyScript = path.join(__dirname, "..", "pdf_generator.py");
+        const cmd = `python "${pyScript}" "${jsonPath}" "${zipPath}" --package ${profile}`;
+
+        exec(cmd, (err, stdout, stderr) => {
+            if (err) {
+                console.error("Python ZIP Packager error:", err, stderr);
+                try { if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath); } catch (e) {}
+                return res.status(500).json({ error: "Failed to generate portal package: " + (stderr || err.message) });
+            }
+
+            const cleanName = (doc.name || "Tender_Package").replace(/[/\\?%*:|"<>]/g, "_").trim();
+            const filename = `${cleanName}_${profile === "gem" ? "GeM_ATC" : "TwoCover_Package"}.zip`;
+
+            res.download(zipPath, filename, (downloadErr) => {
+                try {
+                    if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
+                    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                } catch (e) {}
+                if (downloadErr && !res.headersSent) {
+                    res.status(500).json({ error: downloadErr.message });
+                }
             });
         });
     } catch (err) {

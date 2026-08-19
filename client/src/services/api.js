@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /**
  * Helper to get Auth Headers
@@ -271,5 +271,43 @@ export const deleteAnnexure = async (id) => {
         const err = await res.json();
         throw new Error(err.error || "Failed to delete annexure");
     }
+    return res.json();
+};
+
+export const deprecateAnnexure = async (id) => {
+    const res = await fetch(`${API_URL}/annexures/${id}/deprecate`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to update annexure status");
+    return res.json();
+};
+
+export const fetchAnnexureHistory = async (id) => {
+    const res = await fetch(`${API_URL}/annexures/${id}/history`, {
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to fetch annexure history");
+    return res.json();
+};
+
+// AI Clause & Annexure Recommender
+export const fetchAIRecommendation = async (payload) => {
+    const res = await fetch(`${API_URL}/ai/recommend`, {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to get AI recommendation");
+    return res.json();
+};
+
+// Duplicate Tender
+export const duplicateTender = async (id) => {
+    const res = await fetch(`${API_URL}/tenders/${id}/duplicate`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to duplicate tender");
     return res.json();
 };

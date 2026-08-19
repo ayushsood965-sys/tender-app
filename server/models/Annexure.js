@@ -31,7 +31,23 @@ const AnnexureSchema = new mongoose.Schema({
     isMaster: { type: Boolean, default: true },
     userId: { type: Number, default: null },
     createdByName: { type: String, default: "System Master" },
+    version: { type: Number, default: 1 },
+    status: {
+        type: String,
+        enum: ["active", "deprecated", "draft"],
+        default: "active",
+    },
+    history: [
+        {
+            version: Number,
+            contentTemplate: String,
+            updatedAt: { type: Date, default: Date.now },
+            updatedByName: String,
+            changelog: String,
+        }
+    ],
     createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
 });
 
 module.exports = mongoose.model("Annexure", AnnexureSchema);

@@ -15,6 +15,7 @@ import {
     AlertCircle,
     Eye,
     X,
+    Sparkles,
 } from "lucide-react";
 import {
     fetchDashboardData,
@@ -23,7 +24,12 @@ import {
     updateTerm,
     deleteTerm,
     uploadAnnexure,
+    createAnnexure,
+    updateAnnexure,
+    deprecateAnnexure,
+    fetchAnnexureHistory,
 } from "../services/api";
+import VisualAnnexureBuilder from "../components/VisualAnnexureBuilder";
 
 const ManageTerms = () => {
     const [terms, setTerms] = useState([]);
@@ -34,11 +40,37 @@ const ManageTerms = () => {
     const [activeCategoryFilter, setActiveCategoryFilter] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Annexure Upload State
+    // Annexure Upload & Visual Builder State
     const [annexureMode, setAnnexureMode] = useState("existing"); // 'existing' | 'upload'
     const [uploadingDoc, setUploadingDoc] = useState(false);
     const [uploadSuccess, setUploadSuccess] = useState(null);
     const [previewAnnexure, setPreviewAnnexure] = useState(null);
+    const [isVisualBuilderOpen, setIsVisualBuilderOpen] = useState(false);
+    const [editingAnnexureData, setEditingAnnexureData] = useState(null);
+
+    const handleSaveVisualAnnexure = async (payload) => {
+        try {
+            let saved;
+            if (payload.id && annexures.some(a => a.id === payload.id)) {
+                saved = await updateAnnexure(payload.id, payload);
+            } else {
+                saved = await createAnnexure(payload);
+            }
+            setIsVisualBuilderOpen(false);
+            setEditingAnnexureData(null);
+            await loadData();
+            setTermForm(prev => ({
+                ...prev,
+                hasAnnexure: true,
+                annexureId: saved.id,
+                annexureTitle: saved.title,
+            }));
+            alert("Annexure saved successfully!");
+        } catch (err) {
+            console.error("Save annexure error:", err);
+            alert("Failed to save annexure: " + err.message);
+        }
+    };
 
     const [termForm, setTermForm] = useState({
         id: null,
@@ -214,7 +246,7 @@ const ManageTerms = () => {
 
     return (
         <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex justify-between items-end mb-6">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-3 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">
                         T&C & Annexure Master
@@ -223,6 +255,16 @@ const ManageTerms = () => {
                         Create, link and manage global Terms & Conditions with attached Annexures & Formats.
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setEditingAnnexureData(null);
+                        setIsVisualBuilderOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                    <PenTool size={14} /> Visual Proforma Builder
+                </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -281,9 +323,50 @@ const ManageTerms = () => {
                                     value={termForm.description}
                                     onChange={handleChange}
                                     rows="4"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
-                                    placeholder="Enter the detailed term text..."
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm font-normal"
+                                    placeholder="Enter the detailed term text. Use {{placeholder}} to define dynamic fields..."
                                 ></textarea>
+                            </div>
+
+                            {/* VARIABLE & PLACEHOLDER CRITERIA GUIDE */}
+                            <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-2 text-xs">
+                                <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>Dynamic Variables Criteria Guide</span>
+                                </div>
+                                <p className="text-[11px] text-slate-600 leading-relaxed">
+                                    Define dynamic custom variables by enclosing variable names in double curly braces <code className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-mono font-bold">{"{{placeholder}}"}</code>. During tender creation, an input field will automatically be populated for each placeholder upon clause selection.
+                                </p>
+                                <div className="pt-1">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                        Quick Insert Placeholders:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {[
+                                            "value of tender",
+                                            "warranty_period",
+                                            "delivery_days",
+                                            "delivery_location",
+                                            "inspection_authority",
+                                            "performance_guarantee_percent",
+                                        ].map((tag) => (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => {
+                                                    setTermForm((prev) => ({
+                                                        ...prev,
+                                                        description: (prev.description ? prev.description + " " : "") + `{{${tag}}}`,
+                                                    }));
+                                                }}
+                                                className="text-[10.5px] font-mono bg-white hover:bg-indigo-600 hover:text-white px-2 py-0.5 rounded-lg border border-indigo-200 text-indigo-700 font-semibold transition-all cursor-pointer shadow-2xs"
+                                                title={`Click to append {{${tag}}}`}
+                                            >
+                                                + {"{{" + tag + "}}"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* ANNEXURE LINKING SECTION */}
@@ -575,6 +658,17 @@ const ManageTerms = () => {
                     </div>
                 </div>
             )}
+
+            {/* VISUAL ANNEXURE BUILDER MODAL */}
+            <VisualAnnexureBuilder
+                isOpen={isVisualBuilderOpen}
+                onClose={() => {
+                    setIsVisualBuilderOpen(false);
+                    setEditingAnnexureData(null);
+                }}
+                onSave={handleSaveVisualAnnexure}
+                initialData={editingAnnexureData}
+            />
         </div>
     );
 };

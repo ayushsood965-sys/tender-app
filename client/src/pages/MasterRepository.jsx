@@ -222,9 +222,48 @@ export default function MasterRepository() {
                                     rows={4}
                                     value={termFormData.description}
                                     onChange={(e) => setTermFormData({ ...termFormData, description: e.target.value })}
-                                    placeholder="Full terms and conditions text. You can use placeholders like {{delivery_days}} or {{warranty_years}}."
-                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="Enter full clause text. Use {{placeholder}} for dynamic fields..."
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 font-normal"
                                 />
+                            </div>
+
+                            {/* VARIABLE & PLACEHOLDER CRITERIA GUIDE */}
+                            <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1.5 text-xs">
+                                <div className="flex items-center gap-1.5 font-bold text-purple-900">
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                                    <span>Dynamic Variables Criteria Guide</span>
+                                </div>
+                                <p className="text-[11px] text-slate-600 leading-relaxed">
+                                    Enclose custom variable names in double curly braces <code className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">{"{{placeholder}}"}</code>. When selected, an input box will automatically be created for tender creators.
+                                </p>
+                                <div className="pt-0.5">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                        Quick Tags:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {[
+                                            "value of tender",
+                                            "warranty_period",
+                                            "delivery_days",
+                                            "delivery_location",
+                                            "inspection_authority",
+                                        ].map((tag) => (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => {
+                                                    setTermFormData((prev) => ({
+                                                        ...prev,
+                                                        description: (prev.description ? prev.description + " " : "") + `{{${tag}}}`,
+                                                    }));
+                                                }}
+                                                className="text-[10px] font-mono bg-white hover:bg-purple-600 hover:text-white px-2 py-0.5 rounded-lg border border-purple-200 text-purple-700 font-semibold transition-all cursor-pointer"
+                                            >
+                                                + {"{{" + tag + "}}"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex gap-3 pt-2">

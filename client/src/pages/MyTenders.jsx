@@ -9,8 +9,9 @@ import {
     Eye,
     RefreshCw,
     Plus,
+    Copy,
 } from "lucide-react";
-import { fetchDashboardData, deleteTender } from "../services/api";
+import { fetchDashboardData, deleteTender, duplicateTender } from "../services/api";
 
 const MyTenders = () => {
     const navigate = useNavigate();
@@ -38,6 +39,17 @@ const MyTenders = () => {
     const handleDeleteClick = (id) => {
         setTenderToDelete(id);
         setDeleteModalOpen(true);
+    };
+
+    const handleDuplicate = async (id) => {
+        try {
+            const cloned = await duplicateTender(id);
+            setTenders((prev) => [cloned, ...prev]);
+            alert(`Tender duplicated successfully as "${cloned.tenderName}"!`);
+        } catch (error) {
+            console.error("Failed to duplicate tender", error);
+            alert("Failed to duplicate tender: " + error.message);
+        }
     };
 
     const confirmDelete = async () => {
@@ -165,8 +177,15 @@ const MyTenders = () => {
                                         <Edit2 className="w-4 h-4" /> Edit
                                     </Link>
                                     <button
+                                        onClick={() => handleDuplicate(tender.id)}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors w-full md:w-auto justify-center cursor-pointer"
+                                        title="Clone as New Tender"
+                                    >
+                                        <Copy className="w-4 h-4" /> Clone
+                                    </button>
+                                    <button
                                         onClick={() => handleDeleteClick(tender.id)}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors w-full md:w-auto justify-center"
+                                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors w-full md:w-auto justify-center cursor-pointer"
                                     >
                                         <Trash2 className="w-4 h-4" /> Delete
                                     </button>
