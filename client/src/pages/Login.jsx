@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowRight, Sparkles, User } from "lucide-react";
+import BrandLogo from "../components/BrandLogo";
 
 export default function Login() {
     const [email, setEmail] = useState("");
@@ -41,20 +42,14 @@ export default function Login() {
 
             <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-300">
                 {/* Brand Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white shadow-xl shadow-purple-500/10 border border-purple-100 p-3 mb-4 ring-8 ring-purple-500/5">
-                        <img
-                            src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg"
-                            alt="HPU Logo"
-                            className="w-full h-full object-contain filter drop-shadow-sm"
-                        />
-                    </div>
+                <div className="text-center mb-8 flex flex-col items-center">
+                    <BrandLogo size="xl" showText={false} className="mb-3" />
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                         Himachal Pradesh University
                     </h1>
-                    <p className="text-xs font-bold text-purple-700 mt-1 flex items-center justify-center gap-1.5 uppercase tracking-wider">
+                    <p className="text-xs font-bold text-indigo-700 mt-1 flex items-center justify-center gap-1.5 uppercase tracking-wider">
                         <Sparkles className="w-3.5 h-3.5" />
-                        Tender Management Portal
+                        e-Procurement &amp; Tender Portal
                     </p>
                 </div>
 

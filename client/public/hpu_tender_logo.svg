@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
+  <defs>
+    <linearGradient id="logoShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#312e81" />
+      <stop offset="50%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="logoGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="logoGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#6366f1" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Left Icon Emblem (64x64 mapped in 80x80) -->
+  <g transform="translate(10, 8)">
+    <!-- Outer Glow & Shield -->
+    <path d="M32 2 L55 10 C55 28 47 48 32 60 C17 48 9 28 9 10 Z" fill="url(#logoShieldGrad)" filter="url(#logoGlow)" stroke="#818cf8" stroke-width="1.5"/>
+
+    <!-- Inner Golden Frame -->
+    <path d="M32 7 L50 13.5 C50 28 43 44.5 32 54.5 C21 44.5 14 28 14 13.5 Z" fill="none" stroke="url(#logoGoldGrad)" stroke-width="1" opacity="0.75" stroke-dasharray="2 1.5"/>
+
+    <!-- University Dome Pediment -->
+    <path d="M32 14 L43 20 L21 20 Z" fill="url(#logoGoldGrad)"/>
+    <rect x="22" y="21" width="20" height="2" rx="0.8" fill="#ffffff"/>
+    
+    <!-- Classical Pillars -->
+    <rect x="24.5" y="24" width="2.5" height="11" rx="0.5" fill="#ffffff" opacity="0.95"/>
+    <rect x="30.75" y="24" width="2.5" height="11" rx="0.5" fill="#ffffff" opacity="0.95"/>
+    <rect x="37" y="24" width="2.5" height="11" rx="0.5" fill="#ffffff" opacity="0.95"/>
+    <rect x="22" y="36" width="20" height="2" rx="0.8" fill="#ffffff"/>
+
+    <!-- Document Quill & Seal -->
+    <g transform="translate(24, 38) scale(0.68)">
+      <rect x="2" y="3" width="18" height="22" rx="2.5" fill="#ffffff" stroke="#e0e7ff" stroke-width="1"/>
+      <line x1="6" y1="8" x2="16" y2="8" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="6" y1="12" x2="16" y2="12" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="16" cy="18" r="3.5" fill="url(#logoGoldGrad)"/>
+      <path d="M14.5 18 L15.5 19 L17.5 17" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round"/>
+    </g>
+
+    <!-- Top Star -->
+    <circle cx="32" cy="9.5" r="1.2" fill="#fbbf24"/>
+  </g>
+
+  <!-- Typography Right -->
+  <g transform="translate(82, 16)">
+    <!-- Subtitle Institution Name -->
+    <text x="0" y="14" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#6366f1" letter-spacing="0.08em" text-transform="uppercase">
+      Himachal Pradesh University
+    </text>
+
+    <!-- Main Title -->
+    <text x="0" y="36" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="900" fill="#0f172a" letter-spacing="-0.02em">
+      Tender<tspan fill="#4f46e5">Portal</tspan>
+    </text>
+
+    <!-- Accreditation Tag -->
+    <g transform="translate(0, 44)">
+      <rect x="0" y="0" width="168" height="15" rx="4" fill="#f1f5f9"/>
+      <text x="6" y="11" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="8.5" font-weight="700" fill="#64748b" letter-spacing="0.03em">
+        e-Procurement &amp; Tender System
+      </text>
+    </g>
+  </g>
+</svg>

@@ -13,6 +13,7 @@ import {
     ScrollText,
     Layers,
 } from "lucide-react";
+import BrandLogo from "../components/BrandLogo";
 
 export default function LandingPage() {
     const lottieContainer = useRef(null);
@@ -47,14 +48,10 @@ export default function LandingPage() {
                 <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
                     
                     {/* 1. Subtle Institutional Eyebrow Badge */}
-                    <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-purple-50 border border-purple-100/80 shadow-xs">
-                        <img
-                            src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg"
-                            alt="HPU"
-                            className="w-4 h-4 object-contain"
-                        />
-                        <span className="text-xs font-semibold text-purple-900 tracking-wide">
-                            Himachal Pradesh University • Procurement Portal
+                    <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-indigo-50/90 border border-indigo-100 shadow-xs">
+                        <BrandLogo size="sm" showText={false} />
+                        <span className="text-xs font-bold text-indigo-950 tracking-wide">
+                            Himachal Pradesh University • e-Procurement Portal
                         </span>
                     </div>
 

@@ -15,6 +15,8 @@ import {
     Shield,
 } from "lucide-react";
 
+import BrandLogo from "./BrandLogo";
+
 export default function Sidebar({ isOpen, onClose }) {
     const { user, logout, isSuperAdmin } = useAuth();
     const navigate = useNavigate();
@@ -88,25 +90,8 @@ export default function Sidebar({ isOpen, onClose }) {
             >
                 {/* 1. Top Brand Header */}
                 <div>
-                    <div className="p-5 border-b border-purple-100/80">
-                        <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-2xl bg-white shadow-md shadow-purple-500/10 border border-purple-100 p-2 flex items-center justify-center ring-4 ring-purple-500/5 shrink-0">
-                                <img
-                                    src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg"
-                                    alt="HPU"
-                                    className="w-full h-full object-contain"
-                                />
-                            </div>
-                            <div className="overflow-hidden">
-                                <h1 className="text-sm font-black text-slate-900 tracking-tight truncate flex items-center gap-1.5">
-                                    H.P. University
-                                </h1>
-                                <p className="text-[11px] text-purple-700 font-bold flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse" />
-                                    Tender Portal
-                                </p>
-                            </div>
-                        </div>
+                    <div className="p-4.5 px-5 border-b border-purple-100/80">
+                        <BrandLogo size="default" />
                     </div>
 
                     {/* 2. Navigation Links */}

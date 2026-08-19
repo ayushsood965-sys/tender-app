@@ -15,6 +15,7 @@ import {
     ArrowRight,
     Sparkles,
 } from "lucide-react";
+import BrandLogo from "../components/BrandLogo";
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -107,20 +108,14 @@ export default function Register() {
 
             <div className="w-full max-w-2xl relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8">
                 {/* Brand Header */}
-                <div className="text-center mb-6">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-xl shadow-purple-500/10 border border-purple-100 p-2.5 mb-3 ring-8 ring-purple-500/5">
-                        <img
-                            src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg"
-                            alt="HPU Logo"
-                            className="w-full h-full object-contain filter drop-shadow-sm"
-                        />
-                    </div>
+                <div className="text-center mb-6 flex flex-col items-center">
+                    <BrandLogo size="lg" showText={false} className="mb-2.5" />
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                         Create Your HPU Faculty / Officer Account
                     </h1>
-                    <p className="text-xs font-bold text-purple-700 mt-1 flex items-center justify-center gap-1 uppercase tracking-wider">
+                    <p className="text-xs font-bold text-indigo-700 mt-1 flex items-center justify-center gap-1 uppercase tracking-wider">
                         <Sparkles className="w-3 h-3" />
-                        Tender Management & Documentation Portal
+                        e-Procurement &amp; Tender Documentation Portal
                     </p>
                 </div>
 
