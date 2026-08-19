@@ -255,31 +255,17 @@ const TenderDetails = () => {
 
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => handleExportPdf(doc)}
-                                                    disabled={exportingDoc.id === doc.id && exportingDoc.type === "pdf"}
-                                                    className="flex-1 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                                                    title="Download PDF"
-                                                >
-                                                    {exportingDoc.id === doc.id && exportingDoc.type === "pdf" ? (
-                                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                                    ) : (
-                                                        <Download className="w-3 h-3" />
-                                                    )}
-                                                    PDF
-                                                </button>
-
-                                                <button
                                                     onClick={() => handleExportDocx(doc)}
                                                     disabled={exportingDoc.id === doc.id && exportingDoc.type === "docx"}
-                                                    className="flex-1 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                                                    title="Download DOCX"
+                                                    className="w-full py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                                                    title="Download Word DOCX"
                                                 >
                                                     {exportingDoc.id === doc.id && exportingDoc.type === "docx" ? (
                                                         <RefreshCw className="w-3 h-3 animate-spin" />
                                                     ) : (
                                                         <Download className="w-3 h-3" />
                                                     )}
-                                                    DOCX
+                                                    Word DOCX
                                                 </button>
                                             </div>
                                         </div>

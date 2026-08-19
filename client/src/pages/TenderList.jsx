@@ -363,15 +363,6 @@ export default function TenderList() {
                                                                 <span>{exportingDoc.id === doc.id && exportingDoc.type === "docx" ? "..." : "Word DOCX"}</span>
                                                             </button>
 
-                                                            <button
-                                                                onClick={() => handleExport(doc, "pdf")}
-                                                                disabled={exportingDoc.id === doc.id}
-                                                                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                                                            >
-                                                                <Download className="w-3.5 h-3.5" />
-                                                                <span>{exportingDoc.id === doc.id && exportingDoc.type === "pdf" ? "..." : "PDF"}</span>
-                                                            </button>
-
                                                             {isOwner && (
                                                                 <button
                                                                     onClick={() => setDeleteModal({ open: true, type: "document", id: doc.id, title: doc.name })}

@@ -10,6 +10,7 @@ import {
     updateSavedDocument,
     API_URL
 } from '../services/api';
+import { downloadDocumentAsPdf, downloadDocumentAsDocx } from '../utils/exportUtils';
 
 // A4 Page Layout Component with contentEditable support, watermark, and X/Y page numbering
 const PageLayout = ({ children, pageNumber, totalPages, contentRef, isFirst }) => (
@@ -62,6 +63,8 @@ const TenderPreview = () => {
     const [saveName, setSaveName] = useState("");
     const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | 'error' | null
     const [isSavingDirect, setIsSavingDirect] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
+    const [isExportingDocx, setIsExportingDocx] = useState(false);
 
     useEffect(() => {
         if (!id) {
@@ -598,6 +601,53 @@ const TenderPreview = () => {
         }
     };
 
+    // Download active preview as high-fidelity PDF
+    const handleDownloadPdf = async () => {
+        setIsExportingPdf(true);
+        try {
+            const currentPages = getCurrentPageContents();
+            const docName = currentSavedDoc?.name || (saveName ? saveName.trim() : (data?.tenderName || "Tender_Document"));
+            await downloadDocumentAsPdf({
+                id: savedId,
+                name: docName,
+                pages: currentPages,
+            }, data);
+        } catch (err) {
+            console.error("PDF download error:", err);
+            alert("Failed to export PDF: " + (err.message || "Please try again."));
+        } finally {
+            setIsExportingPdf(false);
+        }
+    };
+
+    // Download as Word DOCX
+    const handleDownloadDocx = async () => {
+        setIsExportingDocx(true);
+        try {
+            const currentPages = getCurrentPageContents();
+            const docName = currentSavedDoc?.name || (saveName ? saveName.trim() : (data?.tenderName || "Tender_Document"));
+
+            if (!savedId) {
+                const newDoc = await saveDocument({
+                    tenderId: parseInt(id),
+                    name: docName,
+                    pages: currentPages,
+                    extraPages: [],
+                });
+                setCurrentSavedDoc(newDoc);
+                setSearchParams({ savedId: newDoc.id });
+                await downloadDocumentAsDocx(newDoc, data);
+            } else {
+                await downloadDocumentAsDocx({ id: savedId, name: docName }, data);
+            }
+        } catch (err) {
+            console.error("DOCX download error:", err);
+            alert("Failed to export Word DOCX: " + (err.message || "Please try again."));
+        } finally {
+            setIsExportingDocx(false);
+        }
+    };
+
     if (loading) return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
             <div className="text-center">
@@ -633,7 +683,7 @@ const TenderPreview = () => {
                 .page-controls button { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 4px; }
             `}</style>
 
-            {/* Clean Editor Toolbar: Save/Edit and Add Page */}
+            {/* Clean Editor Toolbar: Save/Edit, Add Page, Download PDF & DOCX */}
             <div className="flex items-center gap-3 sticky top-4 z-50 bg-white/95 backdrop-blur-xl px-4 py-3 rounded-2xl shadow-xl border border-slate-200">
                 <button
                     onClick={() => navigate("/")}
@@ -684,25 +734,37 @@ const TenderPreview = () => {
 
                 <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
-                {/* Export Actions */}
-                {savedId && (
-                    <div className="flex items-center gap-2">
-                        <a
-                            href={`${API_URL}/documents/${savedId}/pdf`}
-                            download
-                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                            title="Download Printable PDF"
-                        >
-                            <FileDown size={14} /> PDF
-                        </a>
-                        <a
-                            href={`${API_URL}/documents/${savedId}/docx`}
-                            download
-                            className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                            title="Download Word DOCX"
-                        >
-                            <FileText size={14} /> Word
-                        </a>
+                {/* Primary Export Actions: PDF, DOCX, ZIP */}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleDownloadPdf}
+                        disabled={isExportingPdf}
+                        className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white px-4 py-2 rounded-xl shadow-md shadow-red-600/20 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+                        title="Download active preview as High-Fidelity PDF"
+                    >
+                        {isExportingPdf ? (
+                            <RefreshCw size={15} className="animate-spin" />
+                        ) : (
+                            <FileDown size={15} />
+                        )}
+                        <span>{isExportingPdf ? "Generating..." : "Download PDF"}</span>
+                    </button>
+
+                    <button
+                        onClick={handleDownloadDocx}
+                        disabled={isExportingDocx}
+                        className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-70"
+                        title="Download Word DOCX"
+                    >
+                        {isExportingDocx ? (
+                            <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                            <FileText size={14} />
+                        )}
+                        <span>Word DOCX</span>
+                    </button>
+
+                    {savedId && (
                         <a
                             href={`${API_URL}/documents/${savedId}/export-package?profile=${isLimited || isETender ? "two_cover" : "gem"}`}
                             download
@@ -711,8 +773,8 @@ const TenderPreview = () => {
                         >
                             <Package size={14} /> {isLimited || isETender ? "Two-Cover ZIP" : "GeM ZIP"}
                         </a>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
