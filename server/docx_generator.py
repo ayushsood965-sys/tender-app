@@ -218,6 +218,14 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None):
         if elem.name == 'div':
             parse_html_elements_to_docx(elem, doc, logo_path)
 
+def is_annexure_content(html_str):
+    if not html_str:
+        return False
+    soup = BeautifulSoup(html_str, 'html.parser')
+    text = soup.get_text().upper()
+    keywords = ["ANNEXURE", "PROFORMA", "UNDERTAKING", "DECLARATION", "AFFIDAVIT", "BID FORM", "MANUFACTURER AUTHORIZATION"]
+    return any(k in text for k in keywords)
+
 def generate_docx_from_json(input_json_path, output_docx_path, logo_path, watermark_path):
     with open(input_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -240,11 +248,12 @@ def generate_docx_from_json(input_json_path, output_docx_path, logo_path, waterm
     normal_style.font.color.rgb = RGBColor(0, 0, 0)
 
     for idx, page_html in enumerate(pages):
+        # Only start a new page if this page is an Annexure / Undertaking
+        if idx > 0 and is_annexure_content(page_html):
+            doc.add_page_break()
+
         soup = BeautifulSoup(page_html, 'html.parser')
         parse_html_elements_to_docx(soup, doc, logo_path)
-
-        if idx < len(pages) - 1:
-            doc.add_page_break()
 
     temp_raw = output_docx_path + ".temp"
     doc.save(temp_raw)

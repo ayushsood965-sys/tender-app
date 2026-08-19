@@ -392,24 +392,8 @@ const TenderPreview = () => {
                 });
             });
 
-            const CHARS_PER_PAGE = 3000;
-            if (termsHtml.length <= CHARS_PER_PAGE && termsHtml.trim()) {
+            if (termsHtml.trim()) {
                 generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
-            } else if (termsHtml.trim()) {
-                const sections = termsHtml.split(/<h4/);
-                let currentPage = '';
-                sections.forEach((section, idx) => {
-                    const fullSection = idx === 0 ? section : '<h4' + section;
-                    if ((currentPage + fullSection).length > CHARS_PER_PAGE && currentPage.trim()) {
-                        generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
-                        currentPage = fullSection;
-                    } else {
-                        currentPage += fullSection;
-                    }
-                });
-                if (currentPage.trim()) {
-                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
-                }
             }
         }
 
@@ -498,24 +482,8 @@ const TenderPreview = () => {
                 });
             });
 
-            const CHARS_PER_PAGE = 3000;
-            if (termsHtml.length <= CHARS_PER_PAGE && termsHtml.trim()) {
+            if (termsHtml.trim()) {
                 generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
-            } else if (termsHtml.trim()) {
-                const sections = termsHtml.split(/<h4/);
-                let currentPage = '';
-                sections.forEach((section, idx) => {
-                    const fullSection = idx === 0 ? section : '<h4' + section;
-                    if ((currentPage + fullSection).length > CHARS_PER_PAGE && currentPage.trim()) {
-                        generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
-                        currentPage = fullSection;
-                    } else {
-                        currentPage += fullSection;
-                    }
-                });
-                if (currentPage.trim()) {
-                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
-                }
             }
         }
 
