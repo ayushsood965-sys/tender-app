@@ -165,10 +165,14 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None):
 
             # Column widths allocation
             total_width = Inches(6.6)
-            if num_cols == 7: # Annexure-A schedule table
-                col_widths = [Inches(0.5), Inches(1.5), Inches(1.9), Inches(0.6), Inches(0.8), Inches(0.5), Inches(0.8)]
-            elif num_cols == 3: # Summary table
-                col_widths = [Inches(0.7), Inches(2.2), Inches(3.7)]
+            if num_cols == 7: # Annexure-A schedule / Financial BOQ table
+                col_widths = [Inches(0.5), Inches(1.5), Inches(1.8), Inches(0.6), Inches(0.8), Inches(0.6), Inches(0.8)]
+            elif num_cols == 4: # Technical Compliance & Eligibility Fact Sheet
+                col_widths = [Inches(0.6), Inches(3.0), Inches(2.0), Inches(1.0)]
+            elif num_cols == 3: # Summary / 3-col tables
+                col_widths = [Inches(0.8), Inches(2.2), Inches(3.6)]
+            elif num_cols == 2: # Bidder Profile / Key-Value table
+                col_widths = [Inches(2.8), Inches(3.8)]
             else:
                 col_widths = [total_width / num_cols] * num_cols
 
@@ -377,8 +381,13 @@ def generate_docx_from_json(input_json_path, output_docx_path, logo_path, waterm
                 
                 if item.filename == '[Content_Types].xml':
                     ct_str = content.decode('utf-8')
+                    injections = ""
+                    if 'Extension="png"' not in ct_str:
+                        injections += '<Default Extension="png" ContentType="image/png"/>'
                     if 'header1.xml' not in ct_str:
-                        ct_str = ct_str.replace('</Types>', '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>')
+                        injections += '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+                    if injections:
+                        ct_str = ct_str.replace('</Types>', f'{injections}</Types>')
                     zout.writestr(item, ct_str.encode('utf-8'))
 
                 elif item.filename == 'word/_rels/document.xml.rels':

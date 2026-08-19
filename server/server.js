@@ -24,6 +24,7 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api", require("./routes/dashboard"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/terms", require("./routes/terms"));
+app.use("/api/annexures", require("./routes/annexures"));
 app.use("/api/tenders", require("./routes/tenders"));
 app.use("/api/documents", require("./routes/documents"));
 

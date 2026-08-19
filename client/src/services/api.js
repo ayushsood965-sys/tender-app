@@ -205,3 +205,71 @@ export const fetchAdminUsers = async () => {
     if (!res.ok) throw new Error("Failed to fetch users list");
     return res.json();
 };
+
+export const fetchAnnexures = async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = query ? `${API_URL}/annexures?${query}` : `${API_URL}/annexures`;
+    const res = await fetch(url, {
+        headers: getAuthHeaders(),
+    });
+    return res.json();
+};
+
+export const fetchAnnexure = async (id) => {
+    const res = await fetch(`${API_URL}/annexures/${id}`, {
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error("Annexure not found");
+    return res.json();
+};
+
+export const createAnnexure = async (data) => {
+    const res = await fetch(`${API_URL}/annexures`, {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create annexure");
+    }
+    return res.json();
+};
+
+export const uploadAnnexure = async (formData) => {
+    const res = await fetch(`${API_URL}/annexures/upload`, {
+        method: "POST",
+        headers: getAuthHeaders(), // Let browser set multipart content-type boundary
+        body: formData,
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to upload and parse annexure document");
+    }
+    return res.json();
+};
+
+export const updateAnnexure = async (id, data) => {
+    const res = await fetch(`${API_URL}/annexures/${id}`, {
+        method: "PUT",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update annexure");
+    }
+    return res.json();
+};
+
+export const deleteAnnexure = async (id) => {
+    const res = await fetch(`${API_URL}/annexures/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete annexure");
+    }
+    return res.json();
+};

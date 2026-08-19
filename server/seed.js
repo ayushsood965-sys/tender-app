@@ -5,6 +5,8 @@ const Category = require("./models/Category");
 const Term = require("./models/Term");
 const Tender = require("./models/Tender");
 const User = require("./models/User");
+const Annexure = require("./models/Annexure");
+const masterAnnexures = require("./master_annexures.json");
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/tender_app";
 
@@ -1230,6 +1232,7 @@ const seedDB = async () => {
     console.log("🗑️  Clearing existing database collections...");
     await Category.deleteMany({});
     await Term.deleteMany({});
+    await Annexure.deleteMany({});
     await Tender.deleteMany({});
     await User.deleteMany({});
 
@@ -1258,19 +1261,72 @@ const seedDB = async () => {
     await Category.insertMany(masterCategories);
     console.log(`   ✅ ${categories.length} master categories created successfully`);
 
-    console.log("🌱 Seeding Terms & Conditions (Master Clauses)...");
-    const masterTerms = terms.map(t => ({
-      ...t,
+    console.log("🌱 Seeding Master Annexures Library (15 Standard Formats)...");
+    const seededAnnexures = masterAnnexures.map(a => ({
+      ...a,
       isMaster: true,
       createdByName: "System Master",
       userId: superAdmin.id,
     }));
+    await Annexure.insertMany(seededAnnexures);
+    console.log(`   ✅ ${masterAnnexures.length} master annexures created successfully`);
+
+    console.log("🌱 Seeding Terms & Conditions & Mapping Annexures...");
+    // Mapping table: Term ID -> Annexure
+    const annexureMap = {};
+    masterAnnexures.forEach(a => {
+      if (a.linkedTermId) {
+        annexureMap[a.linkedTermId] = a;
+      }
+    });
+
+    // Special custom mappings based on clause codes or titles
+    const masterTerms = terms.map(t => {
+      let linkedAnnexure = annexureMap[t.id];
+      if (!linkedAnnexure) {
+        if (t.title.toLowerCase().includes("blacklisting")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_NON_BLACKLIST");
+        } else if (t.title.toLowerCase().includes("authorization") || t.title.toLowerCase().includes("maf")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_OEM_AUTH");
+        } else if (t.title.toLowerCase().includes("price fall")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_PRICE_FALL");
+        } else if (t.title.toLowerCase().includes("gratification")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_NO_GRATIFICATION");
+        } else if (t.title.toLowerCase().includes("land-border") || t.title.toLowerCase().includes("land border")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_LAND_BORDER");
+        } else if (t.title.toLowerCase().includes("spare parts")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_SPARES_GUARANTEE");
+        } else if (t.title.toLowerCase().includes("mse") || t.title.toLowerCase().includes("emd exemption")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_EMD_EXEMPT");
+        } else if (t.title.toLowerCase().includes("cover letter")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_UNCONDITIONAL_ACCEPT");
+        } else if (t.title.toLowerCase().includes("financial bid") || t.title.toLowerCase().includes("boq")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_FIN_BID");
+        } else if (t.title.toLowerCase().includes("compliance sheet") || t.title.toLowerCase().includes("conformity to technical")) {
+          linkedAnnexure = masterAnnexures.find(a => a.code === "ANNEX_TECH_COMPLIANCE");
+        }
+      }
+
+      return {
+        ...t,
+        isMaster: true,
+        hasAnnexure: !!linkedAnnexure,
+        annexureId: linkedAnnexure ? linkedAnnexure.id : null,
+        annexureTitle: linkedAnnexure ? linkedAnnexure.title : null,
+        createdByName: "System Master",
+        userId: superAdmin.id,
+      };
+    });
+
     await Term.insertMany(masterTerms);
-    console.log(`   ✅ ${terms.length} master terms/clauses created successfully`);
+    const mappedCount = masterTerms.filter(t => t.hasAnnexure).length;
+    console.log(`   ✅ ${terms.length} master terms created (${mappedCount} linked to Annexures)`);
 
     console.log("🌱 Seeding Sample Tenders...");
     const seededTenders = tenders.map(t => ({
       ...t,
+      isAnnexureRequired: true,
+      selectedAnnexureIds: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14],
       userId: superAdmin.id,
       createdBy: {
         id: superAdmin.id,
@@ -1286,7 +1342,8 @@ const seedDB = async () => {
     console.log("\n🎉 Database Seeding Complete!");
     console.log(`   Super Admin: admin@hpuniv.ac.in`);
     console.log(`   Categories: ${categories.length}`);
-    console.log(`   Terms/Clauses: ${terms.length}`);
+    console.log(`   Annexures: ${masterAnnexures.length}`);
+    console.log(`   Terms/Clauses: ${terms.length} (${mappedCount} with Annexures)`);
     console.log(`   Sample Tenders: ${tenders.length}`);
     process.exit(0);
   } catch (err) {

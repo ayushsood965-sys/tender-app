@@ -17,6 +17,7 @@ router.get("/", async (req, res) => {
 router.post("/", optionalAuth, async (req, res) => {
     try {
         const isSuperAdmin = req.user && req.user.role === "superadmin";
+        const Annexure = require("../models/Annexure");
         const newTerm = new Term({
             ...req.body,
             id: Date.now(),
@@ -25,6 +26,14 @@ router.post("/", optionalAuth, async (req, res) => {
             isMaster: isSuperAdmin ? (req.body.isMaster !== undefined ? req.body.isMaster : false) : false,
         });
         await newTerm.save();
+
+        if (newTerm.hasAnnexure && newTerm.annexureId) {
+            await Annexure.findOneAndUpdate(
+                { id: newTerm.annexureId },
+                { linkedTermId: newTerm.id }
+            );
+        }
+
         res.json(newTerm);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -34,6 +43,7 @@ router.post("/", optionalAuth, async (req, res) => {
 // Update Term (Creator or Superadmin only)
 router.put("/:id", optionalAuth, async (req, res) => {
     try {
+        const Annexure = require("../models/Annexure");
         const term = await Term.findOne({ id: parseInt(req.params.id) });
         if (!term) return res.status(404).json({ error: "Term not found" });
 
@@ -54,6 +64,19 @@ router.put("/:id", optionalAuth, async (req, res) => {
             req.body,
             { new: true }
         );
+
+        if (updatedTerm.hasAnnexure && updatedTerm.annexureId) {
+            await Annexure.findOneAndUpdate(
+                { id: updatedTerm.annexureId },
+                { linkedTermId: updatedTerm.id }
+            );
+        } else if (!updatedTerm.hasAnnexure) {
+            await Annexure.findOneAndUpdate(
+                { linkedTermId: updatedTerm.id },
+                { linkedTermId: null }
+            );
+        }
+
         res.json(updatedTerm);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -63,6 +86,7 @@ router.put("/:id", optionalAuth, async (req, res) => {
 // Delete Term (Creator or Superadmin only; Master terms protected)
 router.delete("/:id", optionalAuth, async (req, res) => {
     try {
+        const Annexure = require("../models/Annexure");
         const term = await Term.findOne({ id: parseInt(req.params.id) });
         if (!term) return res.status(404).json({ error: "Term not found" });
 
@@ -79,6 +103,11 @@ router.delete("/:id", optionalAuth, async (req, res) => {
         }
 
         await Term.findOneAndDelete({ id: parseInt(req.params.id) });
+        await Annexure.findOneAndUpdate(
+            { linkedTermId: parseInt(req.params.id) },
+            { linkedTermId: null }
+        );
+
         res.json({ message: "Term deleted successfully" });
     } catch (err) {
         res.status(500).json({ error: err.message });

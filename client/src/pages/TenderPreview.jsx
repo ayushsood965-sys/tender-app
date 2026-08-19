@@ -1,7 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw } from 'lucide-react';
-import { fetchTender, fetchDashboardData, fetchSavedDocument, saveDocument, updateSavedDocument } from '../services/api';
+import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw, Paperclip } from 'lucide-react';
+import {
+    fetchTender,
+    fetchDashboardData,
+    fetchAnnexures,
+    fetchSavedDocument,
+    saveDocument,
+    updateSavedDocument
+} from '../services/api';
 
 // A4 Page Layout Component with contentEditable support, watermark, and X/Y page numbering
 const PageLayout = ({ children, pageNumber, totalPages, contentRef, isFirst }) => (
@@ -40,6 +47,7 @@ const TenderPreview = () => {
     const [data, setData] = useState(null);
     const [terms, setTerms] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [annexures, setAnnexures] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentSavedDoc, setCurrentSavedDoc] = useState(null);
@@ -67,15 +75,17 @@ const TenderPreview = () => {
                 const dashboardData = await fetchDashboardData();
                 const allTerms = dashboardData.terms || [];
                 const allCategories = dashboardData.categories || [];
+                const allAnnexures = await fetchAnnexures();
 
                 const selectedTermIds = tender.selectedTermIds || [];
                 const selectedTerms = allTerms.filter(term => selectedTermIds.includes(term.id));
 
                 setTerms(selectedTerms);
                 setCategories(allCategories);
+                setAnnexures(allAnnexures || []);
                 setData(tender);
 
-                // If loading a saved document, use its pages
+                // If loading a saved document, use its saved pages
                 if (savedId) {
                     const savedDoc = await fetchSavedDocument(savedId);
                     if (savedDoc) {
@@ -90,7 +100,7 @@ const TenderPreview = () => {
                     }
                 } else {
                     // Generate fresh pages from tender data
-                    const generatedPages = generatePages(tender, selectedTerms, allCategories);
+                    const generatedPages = generatePages(tender, selectedTerms, allCategories, allAnnexures);
                     setPages(generatedPages);
                     setSaveName(`${tender.tenderName || "Tender"} - Draft`);
                 }
@@ -107,9 +117,10 @@ const TenderPreview = () => {
     }, [id, savedId]);
 
     // Generate initial page HTML content
-    const generatePages = (tender, selectedTerms, allCategories) => {
+    const generatePages = (tender, selectedTerms, allCategories, allAnnexures = []) => {
         const variables = tender.variables || {};
         const isLimited = tender.documentType === "Limited Tender Document" || tender.tenderType === "limited";
+        const isETender = tender.documentType === "e-tender Document" || tender.tenderType === "etender";
 
         const formatDate = (d) => {
             if (!d) return "__/__/2026";
@@ -117,40 +128,103 @@ const TenderPreview = () => {
             return isNaN(date.getTime()) ? "__/__/2026" : date.toLocaleDateString("en-IN");
         };
 
+        const estCostFormatted = tender.estimatedCost ? Number(tender.estimatedCost).toLocaleString("en-IN") : "2,29,000";
+        const estCostWords = tender.estimatedCostWords || "Rupees Two Lakh Twenty-Nine Thousand only";
+        const emdFormatted = tender.emdAmount ? Number(tender.emdAmount).toLocaleString("en-IN") : (tender.emdRequired || "5,000");
+        const emdWords = tender.emdAmountWords || "Rupees Five Thousand Only";
+        const pbgFormatted = tender.pbgAmount ? Number(tender.pbgAmount).toLocaleString("en-IN") : (tender.pbgRequired || "10,000");
+        const pbgWords = tender.pbgAmountWords || "Rupees Ten Thousand Only";
+
+        const items = (tender.itemsList && tender.itemsList.length > 0) ? tender.itemsList : [
+            { srNo: 1, name: "Table Tennis Table", specs: "22mm Top with 75mm Wheel Size, TTFI approved", quantity: "3" },
+            { srNo: 2, name: "Table Tennis Bat", specs: "Tournament Grade, Flared Grip, Ratings: Speed 70, Spin 70, Control 95", quantity: "12" },
+            { srNo: 3, name: "Badminton Racket", specs: "Carbon material, Lightweight design", quantity: "10" },
+            { srNo: 4, name: "Carrom Board", specs: "12mm Ply, 35\" Overall frame, 29\" Playing area, 3\" hand rest, with stand", quantity: "5" },
+            { srNo: 5, name: "Chess Board", specs: "Foldable 19\"x19\" board with wooden chessmen", quantity: "7" },
+            { srNo: 6, name: "Table Tennis Balls", specs: "3-Star standard, Pack of 3", quantity: "4" },
+            { srNo: 7, name: "Badminton Shuttle Cock", specs: "Nylon material, Standard tournament grade", quantity: "8" },
+            { srNo: 8, name: "Cricket Bat", specs: "Kashmir Willow", quantity: "4" },
+            { srNo: 9, name: "Volley Ball", specs: "Leather material", quantity: "2" },
+            { srNo: 10, name: "Foot Ball", specs: "Rubberised material, standard match quality", quantity: "2" },
+        ];
+
+        // Items Table HTML for Financial Bid Annexure
+        const itemsRowsHtml = items.map((item, idx) => `
+            <tr>
+                <td style="border: 1px solid black; padding: 5px 8px; text-align: center;">${idx + 1}.</td>
+                <td style="border: 1px solid black; padding: 5px 8px; font-weight: 600;">${item.name || ""}</td>
+                <td style="border: 1px solid black; padding: 5px 8px;">${item.specs || ""}</td>
+                <td style="border: 1px solid black; padding: 5px 8px; text-align: center; font-weight: 700;">${item.quantity || "1"}</td>
+                <td style="border: 1px solid black; padding: 5px 8px;"></td>
+                <td style="border: 1px solid black; padding: 5px 8px;"></td>
+                <td style="border: 1px solid black; padding: 5px 8px;"></td>
+            </tr>
+        `).join("");
+
+        const generatedItemsTable = `
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">
+                <thead>
+                    <tr>
+                        <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 6%; text-align: center;">Sr. No.</th>
+                        <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; width: 22%;">Name of Articles</th>
+                        <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; width: 30%;">Specification / Dimensions</th>
+                        <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 10%; text-align: center;">Total Qty</th>
+                        <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 12%; text-align: center;">Base Rate per Unit (Excl. Tax)</th>
+                        <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 8%; text-align: center;">GST (%)</th>
+                        <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 12%; text-align: center;">Total Amount (Incl. all Taxes)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsRowsHtml}
+                    <tr>
+                        <td colspan="6" style="border: 1px solid black; padding: 6px 8px; font-weight: bold; text-align: right;">Grand Total (INR)</td>
+                        <td style="border: 1px solid black; padding: 6px 8px;"></td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+
         const replaceVars = (text) => {
             if (!text) return text;
             let result = text;
-            Object.keys(variables).forEach(key => {
+
+            const map = {
+                tenderName: tender.tenderName || "Procurement of Goods",
+                tenderNo: tender.tenderNo || "1-13/2009-HPU",
+                departmentName: tender.departmentName || "Store Purchase Office",
+                departmentEmail: tender.departmentEmail || "spo@hpuniv.ac.in",
+                tenderInvitingAuthority: tender.tenderInvitingAuthority || "Store Purchase Officer",
+                estimatedCost: estCostFormatted,
+                estimatedCostWords: estCostWords,
+                emdAmount: emdFormatted,
+                emdAmountWords: emdWords,
+                pbgAmount: pbgFormatted,
+                pbgAmountWords: pbgWords,
+                emdPledgeOfficer: tender.emdPledgeOfficer || "Finance Officer, H.P. University, Shimla-05",
+                bidValidity: tender.bidValidity || "90",
+                deliveryDays: tender.deliveryDays || "15",
+                procurementLocations: tender.procurementLocations || "University Campus, Summer Hill, Shimla-171005",
+                courtJurisdiction: tender.courtJurisdiction || "Shimla Urban",
+                publishDate: formatDate(tender.publishDate),
+                bidEndDate: formatDate(tender.bidEndDate),
+                techEvalDate: formatDate(tender.techEvalDate),
+                itemsTable: generatedItemsTable,
+                ...variables,
+            };
+
+            Object.keys(map).forEach(key => {
                 const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-                result = result.replace(regex, variables[key] || `{{${key}}}`);
+                result = result.replace(regex, map[key] !== undefined ? map[key] : `{{${key}}}`);
             });
             return result;
         };
 
+        const generatedPages = [];
+
         // -------------------------------------------------------------
-        // A. LIMITED TENDER DOCUMENT LAYOUT (e.g. Sports Equipment / Local Procurement)
+        // FORMAT 1: LIMITED TENDER DOCUMENT (Sports / Local Procurement)
         // -------------------------------------------------------------
         if (isLimited) {
-            const items = (tender.itemsList && tender.itemsList.length > 0) ? tender.itemsList : [
-                { srNo: 1, name: "Table Tennis Table", specs: "22mm Top with 75mm Wheel Size, TTFI approved", quantity: "3" },
-                { srNo: 2, name: "Table Tennis Bat", specs: "Tournament Grade, Flared Grip, Ratings: Speed 70, Spin 70, Control 95", quantity: "12" },
-                { srNo: 3, name: "Badminton Racket", specs: "Carbon material, Lightweight design", quantity: "10" },
-                { srNo: 4, name: "Carrom Board", specs: "12mm Ply, 35\" Overall frame, 29\" Playing area, 3\" hand rest, with stand", quantity: "5" },
-                { srNo: 5, name: "Chess Board", specs: "Foldable 19\"x19\" board with wooden chessmen", quantity: "7" },
-                { srNo: 6, name: "Table Tennis Balls", specs: "3-Star standard, Pack of 3", quantity: "4" },
-                { srNo: 7, name: "Badminton Shuttle Cock", specs: "Nylon material, Standard tournament grade", quantity: "8" },
-                { srNo: 8, name: "Cricket Bat", specs: "Kashmir Willow", quantity: "4" },
-                { srNo: 9, name: "Volley Ball", specs: "Leather material", quantity: "2" },
-                { srNo: 10, name: "Foot Ball", specs: "Rubberised material, standard match quality", quantity: "2" },
-            ];
-
-            const estCostFormatted = tender.estimatedCost ? Number(tender.estimatedCost).toLocaleString("en-IN") : "2,29,000";
-            const estCostWords = tender.estimatedCostWords || "Rupees Two Lakh Twenty-Nine Thousand only";
-            const emdFormatted = tender.emdAmount ? Number(tender.emdAmount).toLocaleString("en-IN") : (tender.emdRequired || "5,000");
-            const emdWords = tender.emdAmountWords || "Rupees Five Thousand Only";
-            const pbgFormatted = tender.pbgAmount ? Number(tender.pbgAmount).toLocaleString("en-IN") : (tender.pbgRequired || "10,000");
-            const pbgWords = tender.pbgAmountWords || "Rupees Ten Thousand Only";
-
             // Page 1: Notice Letter & Two-Cover Submission System
             const page1 = `
                 <div style="font-size: 11pt; line-height: 1.5; color: #000;">
@@ -193,7 +267,7 @@ const TenderPreview = () => {
                 </div>
             `;
 
-            // Page 2: Instructions to Bidders, Terms & Conditions & Sign-off
+            // Page 2: Instructions to Bidders, Additional Terms & Conditions
             const page2 = `
                 <div style="font-size: 11pt; line-height: 1.5; color: #000; text-align: justify;">
                     <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; text-decoration: underline;">Instructions to Bidders</h3>
@@ -207,213 +281,259 @@ const TenderPreview = () => {
                     <p style="margin-bottom: 8px;"><strong>6. Performance Bank Guarantee (PBG):</strong> The successful bidder must submit a Performance Bank Guarantee of ₹ ${pbgFormatted}/- (${pbgWords}) 15 days prior to the issuance of the award letter.</p>
                     <p style="margin-bottom: 8px;"><strong>7. Completion Time:</strong> The successful bidder must complete the supply within <strong>${tender.deliveryDays || 15} days</strong> after issuance of the supply order.</p>
                     <p style="margin-bottom: 8px;"><strong>8. Statutory Documents:</strong> The bidder must attach self-attested valid copies of the PAN Card and GST Registration Certificate along with the Technical Bid.</p>
-                    <p style="margin-bottom: 8px;"><strong>9. Non-Blacklisting Declaration:</strong> The bidder must submit an affidavit on a Non-Judicial Stamp Paper of ₹ 50/- duly attested by a Notary Public/Executive Magistrate declaring that the firm has not been blacklisted, debarred, or banned by any Government Department/PSU/Autonomous Body.</p>
-                    <p style="margin-bottom: 8px;"><strong>10. Warranty:</strong> The supplier warrants that the supplied articles shall be free from defects in material and workmanship. For durable items (Tables, Boards, Heavy Equipment): <strong>${tender.warrantyDurable || "12 months"}</strong>; for consumable items: <strong>${tender.warrantyConsumable || "6 months"}</strong> from final acceptance.</p>
-                    <p style="margin-bottom: 8px;"><strong>11. Payment Release:</strong> Payment will be made following inspection and verification by the concerned committee, confirming that the material is in good condition and meets specifications.</p>
-                    <p style="margin-bottom: 8px;"><strong>12. Rejection of Bids:</strong> Late bids, telegraphic bids, or bids sent via email will not be considered.</p>
-                    <p style="margin-bottom: 8px;"><strong>13. Jurisdiction:</strong> All disputes arising out of or in connection with this tender shall be subject to the exclusive jurisdiction of the courts in ${tender.courtJurisdiction || "Shimla Urban"}.</p>
-                    <p style="margin-bottom: 16px;"><strong>14. Validity:</strong> Rates approved under the purchase order will remain valid for ${tender.bidValidity || 90} days / one year.</p>
+                    <p style="margin-bottom: 8px;"><strong>9. Non-Blacklisting Declaration:</strong> The bidder must submit an affidavit on a Non-Judicial Stamp Paper of ₹ 50/- duly attested by a Notary Public declaring that the firm has not been blacklisted or banned.</p>
+                    <p style="margin-bottom: 8px;"><strong>10. Warranty:</strong> For durable items: <strong>${tender.warrantyDurable || "12 months"}</strong>; for consumable items: <strong>${tender.warrantyConsumable || "6 months"}</strong> from final acceptance.</p>
+                    <p style="margin-bottom: 8px;"><strong>11. Jurisdiction:</strong> All disputes shall be subject to the exclusive jurisdiction of the courts in ${tender.courtJurisdiction || "Shimla Urban"}.</p>
+                    <p style="margin-bottom: 16px;"><strong>12. Validity:</strong> Rates approved will remain valid for ${tender.bidValidity || 90} days.</p>
                     
                     <div style="margin-top: 24px; text-align: right;">
                         <p style="margin-bottom: 30px;">Yours faithfully,</p>
                         <p style="font-weight: bold; margin-bottom: 2px;">${tender.tenderInvitingAuthority || "Store Purchase Officer"}</p>
-                        <p>H.P. University, Shimla-5.</p>
+                        <p>Himachal Pradesh University, Shimla-5.</p>
                     </div>
                 </div>
             `;
 
-            // Page 3: Annexure-A Financial Bid Submission Form & Schedule Table
-            const itemsRowsHtml = items.map((item, idx) => `
-                <tr>
-                    <td style="border: 1px solid black; padding: 5px 8px; text-align: center;">${idx + 1}.</td>
-                    <td style="border: 1px solid black; padding: 5px 8px; font-weight: 600;">${item.name || ""}</td>
-                    <td style="border: 1px solid black; padding: 5px 8px;">${item.specs || ""}</td>
-                    <td style="border: 1px solid black; padding: 5px 8px; text-align: center; font-weight: 700;">${item.quantity || "1"}</td>
-                    <td style="border: 1px solid black; padding: 5px 8px;"></td>
-                    <td style="border: 1px solid black; padding: 5px 8px;"></td>
-                    <td style="border: 1px solid black; padding: 5px 8px;"></td>
-                </tr>
-            `).join("");
+            generatedPages.push({ id: '1', html: page1 });
+            generatedPages.push({ id: '2', html: page2 });
+        }
 
-            const page3 = `
-                <div style="font-size: 11pt; line-height: 1.5; color: #000;">
-                    <div style="text-align: center; margin-bottom: 14px;">
-                        <h2 style="font-size: 17px; font-weight: bold; text-decoration: underline; margin-bottom: 3px;">Annexure-A</h2>
-                        <h3 style="font-size: 15px; font-weight: bold;">Financial Bid Submission Form</h3>
+        // -------------------------------------------------------------
+        // FORMAT 2: GeM ATC DOCUMENT
+        // -------------------------------------------------------------
+        else if (!isETender) {
+            // Page 1: Cover Page
+            const page1 = `
+                <div style="height: 100%; display: flex; flex-direction: column; padding-top: 40px; text-align: center;">
+                    <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 4px;">Himachal Pradesh University,</h2>
+                    <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">(NAAC Accredited 'A' Grade University)</h3>
+                    <h3 style="font-size: 16px; font-weight: bold;">"${tender.departmentName || 'Department of Physics'}"</h3>
+                    <div style="margin: 24px auto; text-align: center;">
+                        <img src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg" alt="HPU Logo" style="height: 130px; width: auto;" />
                     </div>
-                    <div style="margin-bottom: 12px; font-size: 10pt;">
-                        <p style="margin-bottom: 4px;"><strong>Name of the Firm:</strong> ______________________________________________________________</p>
-                        <p style="margin-bottom: 4px;"><strong>Address:</strong> _______________________________________________________________________</p>
-                        <p style="margin-bottom: 10px;"><strong>GST No:</strong> _______________________________________________________________________</p>
+                    <h1 style="font-size: 20px; font-weight: bold; margin: 16px 20px;">
+                        Bid Document for Procurement of<br/>
+                        <span style="font-size: 17px; font-weight: bold; color: #1e3a8a; display: block; margin-top: 6px;">${tender.tenderName || 'Equipment / System'}</span>
+                        <br/>on GeM Portal for<br/>
+                        <span style="font-size: 17px; font-weight: normal; display: block; margin-top: 6px;">${tender.departmentName || 'Science Central Workshop, Department of Physics'}, Himachal Pradesh University, Shimla-171005</span>
+                    </h1>
+                    <div style="margin-top: 24px; font-size: 14px;">
+                        <p style="margin-bottom: 6px;"><strong>Website:</strong> <a href="https://www.hpuniv.ac.in" style="color: #1e3a8a; text-decoration: underline;">https://www.hpuniv.ac.in</a></p>
+                        <p><strong>E-mail:</strong> ${tender.departmentEmail || 'physicshpu@gmail.com'}</p>
                     </div>
-                    
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">
+                </div>
+            `;
+
+            // Page 2: Summary Table + Section 1
+            const page2 = `
+                <div>
+                    <h3 style="font-size: 16px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 12px; text-align: center;">SUMMARY</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10pt;">
                         <thead>
                             <tr>
-                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 6%; text-align: center;">Sr. No.</th>
-                                <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; width: 22%;">Name of Articles</th>
-                                <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; width: 30%;">Specification / Dimensions</th>
-                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 10%; text-align: center;">Total Qty</th>
-                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 12%; text-align: center;">Base Rate (Excl. Tax)</th>
-                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 8%; text-align: center;">GST (%)</th>
-                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 12%; text-align: center;">Total Amount</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 8%;">Sr. No.</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 32%;">Description</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 60%;">Details</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${itemsRowsHtml}
-                            <tr>
-                                <td colspan="6" style="border: 1px solid black; padding: 6px 8px; font-weight: bold; text-align: right;">Grand Total (INR)</td>
-                                <td style="border: 1px solid black; padding: 6px 8px;"></td>
-                            </tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">1.</td><td style="border: 1px solid black; padding: 6px 8px;">Item Description</td><td style="border: 1px solid black; padding: 6px 8px;"><strong>${tender.tenderName || 'Equipment / System'}</strong></td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">2.</td><td style="border: 1px solid black; padding: 6px 8px;">Quantity</td><td style="border: 1px solid black; padding: 6px 8px;">${tender.itemQuantity || '1 Unit'}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">3.</td><td style="border: 1px solid black; padding: 6px 8px;">Department</td><td style="border: 1px solid black; padding: 6px 8px;">${tender.departmentName || 'Department of Physics'}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">4.</td><td style="border: 1px solid black; padding: 6px 8px;">Bid Start Date & Time</td><td style="border: 1px solid black; padding: 6px 8px;">[as mentioned in GeM Bid Document]</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">5.</td><td style="border: 1px solid black; padding: 6px 8px;">Bid End Date & Time</td><td style="border: 1px solid black; padding: 6px 8px;">${formatDate(tender.bidEndDate)} till ${tender.bidEndTime || '5:00 P.M.'}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">6.</td><td style="border: 1px solid black; padding: 6px 8px;">Pre-Bid Meeting</td><td style="border: 1px solid black; padding: 6px 8px;">${tender.isPreBidRequired === 'yes' ? formatDate(tender.preBidDate) : 'Not Applicable'}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">7.</td><td style="border: 1px solid black; padding: 6px 8px;">Earnest Money Deposit (EMD)</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${emdFormatted}/- (${emdWords})</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">8.</td><td style="border: 1px solid black; padding: 6px 8px;">Performance Security (PBG)</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${pbgFormatted}/- (${pbgWords})</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">9.</td><td style="border: 1px solid black; padding: 6px 8px;">Pledge of EMD / PBG</td><td style="border: 1px solid black; padding: 6px 8px;">In favour of: <strong>${tender.emdPledgeOfficer || 'Finance Officer, H.P. University, Shimla-05'}</strong></td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">10.</td><td style="border: 1px solid black; padding: 6px 8px;">Bid Validity</td><td style="border: 1px solid black; padding: 6px 8px;">${tender.bidValidity || '90'} days from date of publication</td></tr>
                         </tbody>
                     </table>
-
-                    <div style="font-size: 10pt; text-align: justify; margin-top: 14px;">
-                        <p><strong>Declaration:</strong></p>
-                        <p style="margin-bottom: 16px;">
-                            We undertake that, if our bid is accepted, we will complete the supply within the specified time frame. We hereby accept all terms and conditions given in the tender document and agree to abide by this bid for the validity period specified in the tender document.
-                        </p>
-                        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                            <div>
-                                <p><strong>Date:</strong> _ _ / _ _ / 2026</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p style="margin-bottom: 24px;"><strong>Signature of Authorized Person:</strong> ___________________________</p>
-                                <p><strong>Seal of the Firm:</strong> _________________________</p>
-                            </div>
+                    <p style="font-weight: bold; font-size: 9.5pt; border: 1px solid #cbd5e1; padding: 7px; background-color: #f8fafc; margin-bottom: 14px;"><strong>Note:</strong> The terms and conditions specified in this tender document shall prevail over the terms and conditions available on the GeM portal in case of any conflict.</p>
+                    <div>
+                        <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 10px; text-align: center;">SECTION I: INSTRUCTIONS FOR BIDDERS</h3>
+                        <div style="text-align: justify; font-size: 10.5pt; line-height: 1.5;">
+                            <p style="margin-bottom: 8px;"><strong>1.1 Bid Submission:</strong> Bidders must be registered on the Government e-Marketplace (GeM) portal. All bids, including technical and financial components, must be submitted exclusively online through the GeM portal before the specified deadline. Physical bids will not be accepted.</p>
+                            <p style="margin-bottom: 8px;"><strong>1.2 Governing Terms:</strong> This bid process will be governed by the General Terms and Conditions (GTC) of GeM in addition to the Additional Terms and Conditions (ATC) specified in this document.</p>
+                            <p><strong>1.3 Digital Signature:</strong> Bids must be digitally signed by an authorized representative using a valid Class-II or Class-III Digital Signature Certificate (DSC).</p>
                         </div>
                     </div>
                 </div>
             `;
 
-            return [
-                { id: '1', html: page1 },
-                { id: '2', html: page2 },
-                { id: '3', html: page3 },
-            ];
-        }
+            generatedPages.push({ id: '1', html: page1 });
+            generatedPages.push({ id: '2', html: page2 });
 
-        // -------------------------------------------------------------
-        // B. GeM ATC DOCUMENT & e-TENDER DOCUMENT LAYOUT
-        // -------------------------------------------------------------
-        // Page 1: Cover Page
-        const page1 = `
-            <div style="height: 100%; display: flex; flex-direction: column; padding-top: 50px; text-align: center;">
-                <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 4px;">Himachal Pradesh University,</h2>
-                <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">(NAAC Accredited 'A' Grade University)</h3>
-                <h3 style="font-size: 16px; font-weight: bold;">"${tender.departmentName || 'N/A'}"</h3>
-                <div style="margin: 28px auto; text-align: center;">
-                    <img src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg" alt="HPU Logo" style="height: 140px; width: auto;" />
-                </div>
-                <h1 style="font-size: 21px; font-weight: bold; margin: 20px 24px;">
-                    Bid Document for<br/>
-                    <span style="font-size: 18px; font-weight: normal; display: block; margin-top: 8px;">${tender.tenderName || 'N/A'}</span>
-                    <br/>for<br/>
-                    <span style="font-size: 18px; font-weight: normal; display: block; margin-top: 8px;">${tender.departmentName || 'N/A'}</span>
-                </h1>
-                <div style="margin-top: 28px; font-size: 15px;">
-                    <p style="margin-bottom: 6px;"><strong>Website:</strong> <a href="https://www.hpuniv.ac.in" style="color: #1e3a8a; text-decoration: underline;">https://www.hpuniv.ac.in</a></p>
-                    <p><strong>E-mail:</strong> ${tender.departmentEmail || 'N/A'}</p>
-                </div>
-            </div>
-        `;
-
-        // Page 2: Summary Table + Section 1
-        const page2 = `
-            <div>
-                <h3 style="font-size: 16px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 14px; text-align: center;">SUMMARY</h3>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 10pt;">
-                    <thead>
-                        <tr>
-                            <th style="border: 1px solid black; padding: 7px 10px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 10%;">Sr. No.</th>
-                            <th style="border: 1px solid black; padding: 7px 10px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 30%;">Description</th>
-                            <th style="border: 1px solid black; padding: 7px 10px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 60%;">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">1.</td><td style="border: 1px solid black; padding: 7px 10px;">Item Description</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.tenderName || 'N/A'}</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">2.</td><td style="border: 1px solid black; padding: 7px 10px;">Quantity</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.itemQuantity || 'N/A'}</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">3.</td><td style="border: 1px solid black; padding: 7px 10px;">Department</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.departmentName || 'N/A'}</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">4.</td><td style="border: 1px solid black; padding: 7px 10px;">Bid Start Date & Time</td><td style="border: 1px solid black; padding: 7px 10px;">[as mentioned in Bid Document]</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">5.</td><td style="border: 1px solid black; padding: 7px 10px;">Bid End Date & Time</td><td style="border: 1px solid black; padding: 7px 10px;">[as mentioned in Bid Document]</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">6.</td><td style="border: 1px solid black; padding: 7px 10px;">Pre-Bid Meeting</td><td style="border: 1px solid black; padding: 7px 10px;">[as mentioned in Bid Document]</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">7.</td><td style="border: 1px solid black; padding: 7px 10px;">Earnest Money Deposit (EMD)</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.emdRequired || 'N/A'}</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">8.</td><td style="border: 1px solid black; padding: 7px 10px;">Performance Security</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.pbgRequired || 'N/A'}</td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">9.</td><td style="border: 1px solid black; padding: 7px 10px;">Pledge of EMD / PBG</td><td style="border: 1px solid black; padding: 7px 10px;">EMD and PBG must be pledged in the name of: <strong>${tender.emdPledgeOfficer || 'N/A'}</strong></td></tr>
-                        <tr><td style="border: 1px solid black; padding: 7px 10px;">10.</td><td style="border: 1px solid black; padding: 7px 10px;">Bid Validity</td><td style="border: 1px solid black; padding: 7px 10px;">${tender.bidValidity || 'N/A'} days from date of publication</td></tr>
-                    </tbody>
-                </table>
-                <p style="font-weight: bold; font-size: 10pt; border: 1px solid #ccc; padding: 8px; background-color: #f9f9f9; margin-bottom: 16px;"><strong>Note:</strong> The terms and conditions specified in this tender document shall prevail over any portal default conditions in case of any conflict.</p>
-                <div>
-                    <h3 style="font-size: 16px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 12px; text-align: center;">SECTION 1: INSTRUCTIONS FOR BIDDERS</h3>
-                    <div style="text-align: justify; font-size: 11pt; line-height: 1.5;">
-                        <p style="margin-bottom: 10px;"><strong>1.1 Bid Submission:</strong> Bidders must be registered on the designated procurement portal. All bids must be submitted exclusively online before the specified deadline.</p>
-                        <p><strong>1.2 Governing Terms:</strong> This bid process will be governed by the General Terms and Conditions (GTC) in addition to the Additional Terms and Conditions (ATC) specified in this document.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Generate Terms pages
-        const termsPages = [];
-        const grouped = {};
-        selectedTerms.forEach(term => {
-            if (!grouped[term.categoryId]) grouped[term.categoryId] = [];
-            grouped[term.categoryId].push(term);
-        });
-
-        let termsHtml = '';
-        termsHtml += `
-            <div style="margin-bottom: 24px;">
-                <h4 style="font-size: 15px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; margin-top: 16px;">SECTION 2: GENERAL REQUIREMENTS</h4>
-                <div style="text-align: justify; font-size: 11pt; line-height: 1.5;">
-                    <p style="margin-bottom: 10px;"><strong>2.1 Digital Signature:</strong> <span style="font-weight: normal;">Bids must be digitally signed by an authorized representative using a valid Class-II or Class-III DSC.</span></p>
-                    <p style="margin-bottom: 10px;"><strong>2.2 Documentation:</strong> <span style="font-weight: normal;">Bidders are required to upload scanned copies of all necessary documents. All documents must be clear, legible, and duly signed and stamped.</span></p>
-                </div>
-            </div>
-        `;
-
-        allCategories.forEach((cat, catIndex) => {
-            const catTerms = grouped[cat.id];
-            if (!catTerms || catTerms.length === 0) return;
-
-            termsHtml += `<h4 style="font-size: 15px; font-weight: bold; text-transform: uppercase; margin-bottom: 14px; margin-top: 20px;">SECTION ${catIndex + 3}: ${cat.name.toUpperCase()}</h4>`;
-
-            catTerms.forEach((term, termIndex) => {
-                const description = replaceVars(term.description);
-                termsHtml += `
-                    <div style="margin-bottom: 12px; padding-left: 6px; text-align: justify; line-height: 1.5; font-size: 11pt;">
-                        <p><strong>${catIndex + 3}.${termIndex + 1} ${term.title}:</strong> <span style="font-weight: normal;">${description}</span></p>
-                    </div>
-                `;
+            // Generate Terms pages
+            const grouped = {};
+            selectedTerms.forEach(term => {
+                if (!grouped[term.categoryId]) grouped[term.categoryId] = [];
+                grouped[term.categoryId].push(term);
             });
-        });
 
-        const CHARS_PER_PAGE = 3200;
-        if (termsHtml.length <= CHARS_PER_PAGE) {
-            termsPages.push(termsHtml);
-        } else {
-            const sections = termsHtml.split(/<h4/);
-            let currentPage = '';
-            sections.forEach((section, idx) => {
-                const fullSection = idx === 0 ? section : '<h4' + section;
-                if ((currentPage + fullSection).length > CHARS_PER_PAGE && currentPage.trim()) {
-                    termsPages.push(currentPage);
-                    currentPage = fullSection;
-                } else {
-                    currentPage += fullSection;
+            let termsHtml = '';
+            allCategories.forEach((cat, catIndex) => {
+                const catTerms = grouped[cat.id];
+                if (!catTerms || catTerms.length === 0) return;
+
+                termsHtml += `<h4 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; margin-top: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">SECTION ${catIndex + 2}: ${cat.name.toUpperCase()}</h4>`;
+
+                catTerms.forEach((term, termIndex) => {
+                    const description = replaceVars(term.description);
+                    termsHtml += `
+                        <div style="margin-bottom: 10px; padding-left: 4px; text-align: justify; line-height: 1.5; font-size: 10.5pt;">
+                            <p><strong>${catIndex + 2}.${termIndex + 1} ${term.title}:</strong> <span style="font-weight: normal;">${description}</span></p>
+                        </div>
+                    `;
+                });
+            });
+
+            const CHARS_PER_PAGE = 3000;
+            if (termsHtml.length <= CHARS_PER_PAGE && termsHtml.trim()) {
+                generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
+            } else if (termsHtml.trim()) {
+                const sections = termsHtml.split(/<h4/);
+                let currentPage = '';
+                sections.forEach((section, idx) => {
+                    const fullSection = idx === 0 ? section : '<h4' + section;
+                    if ((currentPage + fullSection).length > CHARS_PER_PAGE && currentPage.trim()) {
+                        generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
+                        currentPage = fullSection;
+                    } else {
+                        currentPage += fullSection;
+                    }
+                });
+                if (currentPage.trim()) {
+                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
                 }
-            });
-            if (currentPage.trim()) {
-                termsPages.push(currentPage);
             }
         }
 
-        return [
-            { id: '1', html: page1 },
-            { id: '2', html: page2 },
-            ...termsPages.map((html, idx) => ({ id: `${3 + idx}`, html })),
-        ];
+        // -------------------------------------------------------------
+        // FORMAT 3: e-TENDER DOCUMENT (State/Central e-Procurement Portal)
+        // -------------------------------------------------------------
+        else {
+            // Page 1: e-Tender Cover Page
+            const page1 = `
+                <div style="height: 100%; display: flex; flex-direction: column; padding-top: 40px; text-align: center;">
+                    <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 4px;">Himachal Pradesh University,</h2>
+                    <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">(NAAC Accredited 'A' Grade University)</h3>
+                    <h3 style="font-size: 16px; font-weight: bold;">“${tender.departmentName || 'CDOE, H.P.U.'}”</h3>
+                    <div style="margin: 26px auto; text-align: center;">
+                        <img src="https://upload.wikimedia.org/wikipedia/en/d/d8/Himachal_Pradesh_University_Shimla_Logo.svg" alt="HPU Logo" style="height: 130px; width: auto;" />
+                    </div>
+                    <h1 style="font-size: 20px; font-weight: bold; margin: 18px 20px; text-transform: uppercase;">
+                        TENDER DOCUMENT FOR<br/>
+                        <span style="font-size: 17px; font-weight: bold; color: #1e3a8a; display: block; margin-top: 6px;">${tender.tenderName || 'PRINTING AND SUPPLY OF SELF LEARNING MATERIAL (SLM)'}</span>
+                    </h1>
+                    <div style="margin-top: 24px; font-size: 14px;">
+                        <p style="margin-bottom: 6px;"><strong>Tender Reference No:</strong> ${tender.tenderNo || 'HPU/CDOE/2026/01'}</p>
+                        <p style="margin-bottom: 6px;"><strong>Portal:</strong> <a href="https://hptenders.gov.in" style="color: #1e3a8a; text-decoration: underline;">https://hptenders.gov.in</a></p>
+                        <p><strong>E-mail:</strong> ${tender.departmentEmail || 'director.cdoe@hpuniv.ac.in'}</p>
+                    </div>
+                </div>
+            `;
+
+            // Page 2: Schedule of Requirements & Critical Date Sheet
+            const page2 = `
+                <div>
+                    <h3 style="font-size: 15px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 12px; text-align: center;">SCHEDULE OF REQUIREMENTS & CRITICAL DATES</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10pt;">
+                        <thead>
+                            <tr>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 8%;">Sr.</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 34%;">Description</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background-color: #f0f0f0; font-weight: 700; text-align: left; width: 58%;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">1.</td><td style="border: 1px solid black; padding: 6px 8px;">Scope of Work</td><td style="border: 1px solid black; padding: 6px 8px;"><strong>${tender.tenderName || 'Printing and Supply Work'}</strong></td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">2.</td><td style="border: 1px solid black; padding: 6px 8px;">Estimated Value</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${estCostFormatted}/- (${estCostWords})</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">3.</td><td style="border: 1px solid black; padding: 6px 8px;">Tender Document Fee</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${tender.tenderFee || '1,000'}/- (Non-refundable)</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">4.</td><td style="border: 1px solid black; padding: 6px 8px;">Earnest Money Deposit (EMD)</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${emdFormatted}/- (${emdWords})</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">5.</td><td style="border: 1px solid black; padding: 6px 8px;">Performance Security (PBG)</td><td style="border: 1px solid black; padding: 6px 8px;">₹ ${pbgFormatted}/- (${pbgWords})</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">6.</td><td style="border: 1px solid black; padding: 6px 8px;">Publish / Notice Date</td><td style="border: 1px solid black; padding: 6px 8px;">${formatDate(tender.publishDate)}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">7.</td><td style="border: 1px solid black; padding: 6px 8px;">Bid Submission Deadline</td><td style="border: 1px solid black; padding: 6px 8px;">${formatDate(tender.bidEndDate)} till ${tender.bidEndTime || '5:00 P.M.'}</td></tr>
+                            <tr><td style="border: 1px solid black; padding: 6px 8px;">8.</td><td style="border: 1px solid black; padding: 6px 8px;">Technical Bid Opening Date</td><td style="border: 1px solid black; padding: 6px 8px;">${formatDate(tender.techEvalDate)} at ${tender.techEvalTime || '11:30 A.M.'}</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 10px; margin-top: 14px; text-align: center;">SECTION 1: INSTRUCTIONS TO BIDDERS</h3>
+                    <div style="text-align: justify; font-size: 10.5pt; line-height: 1.5;">
+                        <p style="margin-bottom: 8px;"><strong>1.1 Online Submission:</strong> Bids must be submitted online on the e-Procurement Portal (hptenders.gov.in). The tender shall be processed in Two-Cover System: Cover-1 (Technical Bid & Fee) and Cover-2 (Financial BOQ).</p>
+                        <p style="margin-bottom: 8px;"><strong>1.2 Digital Signatures:</strong> Bidders must possess valid Class-III DSC to upload bids and technical schedules.</p>
+                        <p><strong>1.3 Validity:</strong> Bids shall remain valid for a period of ${tender.bidValidity || 90} days from the date of technical bid opening.</p>
+                    </div>
+                </div>
+            `;
+
+            generatedPages.push({ id: '1', html: page1 });
+            generatedPages.push({ id: '2', html: page2 });
+
+            // Generate Terms pages for e-tender
+            const grouped = {};
+            selectedTerms.forEach(term => {
+                if (!grouped[term.categoryId]) grouped[term.categoryId] = [];
+                grouped[term.categoryId].push(term);
+            });
+
+            let termsHtml = '';
+            allCategories.forEach((cat, catIndex) => {
+                const catTerms = grouped[cat.id];
+                if (!catTerms || catTerms.length === 0) return;
+
+                termsHtml += `<h4 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; margin-top: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">SECTION ${catIndex + 2}: ${cat.name.toUpperCase()}</h4>`;
+
+                catTerms.forEach((term, termIndex) => {
+                    const description = replaceVars(term.description);
+                    termsHtml += `
+                        <div style="margin-bottom: 10px; padding-left: 4px; text-align: justify; line-height: 1.5; font-size: 10.5pt;">
+                            <p><strong>${catIndex + 2}.${termIndex + 1} ${term.title}:</strong> <span style="font-weight: normal;">${description}</span></p>
+                        </div>
+                    `;
+                });
+            });
+
+            const CHARS_PER_PAGE = 3000;
+            if (termsHtml.length <= CHARS_PER_PAGE && termsHtml.trim()) {
+                generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
+            } else if (termsHtml.trim()) {
+                const sections = termsHtml.split(/<h4/);
+                let currentPage = '';
+                sections.forEach((section, idx) => {
+                    const fullSection = idx === 0 ? section : '<h4' + section;
+                    if ((currentPage + fullSection).length > CHARS_PER_PAGE && currentPage.trim()) {
+                        generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
+                        currentPage = fullSection;
+                    } else {
+                        currentPage += fullSection;
+                    }
+                });
+                if (currentPage.trim()) {
+                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${currentPage}</div>` });
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // DYNAMIC ANNEXURES RENDERING (APPLIES TO ALL SELECTED ANNEXURES)
+        // -------------------------------------------------------------
+        if (tender.isAnnexureRequired !== false) {
+            const selectedAnnexIds = tender.selectedAnnexureIds || [];
+            const selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.includes(a.id));
+
+            selectedAnnexList.forEach((annex) => {
+                let renderedTemplate = annex.contentTemplate || `<p>${annex.title}</p>`;
+                renderedTemplate = replaceVars(renderedTemplate);
+
+                generatedPages.push({
+                    id: `${generatedPages.length + 1}`,
+                    html: `<div>${renderedTemplate}</div>`,
+                });
+            });
+        }
+
+        return generatedPages;
     };
 
     const addNewPage = () => {
@@ -509,8 +629,8 @@ const TenderPreview = () => {
     if (loading) return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
             <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600 font-medium">Loading document...</p>
+                <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600 font-medium">Generating document from templates & annexures...</p>
             </div>
         </div>
     );
@@ -541,11 +661,11 @@ const TenderPreview = () => {
                 .page-controls button { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 4px; }
             `}</style>
 
-            {/* Clean Editor Toolbar: Only Save/Edit and Add Page */}
+            {/* Clean Editor Toolbar: Save/Edit and Add Page */}
             <div className="flex items-center gap-3 sticky top-4 z-50 bg-white/95 backdrop-blur-xl px-4 py-3 rounded-2xl shadow-xl border border-slate-200">
                 <button
                     onClick={() => navigate("/")}
-                    className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors"
+                    className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer"
                     title="Back to Dashboard"
                 >
                     <ArrowLeft size={16} /> Back
@@ -558,7 +678,7 @@ const TenderPreview = () => {
                         <button
                             onClick={handleQuickSave}
                             disabled={isSavingDirect}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl shadow-md shadow-blue-500/20 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
+                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl shadow-md shadow-purple-500/20 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
                         >
                             {isSavingDirect ? (
                                 <RefreshCw size={16} className="animate-spin" />
@@ -569,7 +689,7 @@ const TenderPreview = () => {
                         </button>
                         <button
                             onClick={handleSaveNewClick}
-                            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer"
                         >
                             Save as New Version
                         </button>
@@ -577,7 +697,7 @@ const TenderPreview = () => {
                 ) : (
                     <button
                         onClick={handleSaveNewClick}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl shadow-md shadow-blue-500/20 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl shadow-md shadow-purple-500/20 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                     >
                         <Save size={16} /> Save Version
                     </button>
@@ -585,7 +705,7 @@ const TenderPreview = () => {
 
                 <button
                     onClick={addNewPage}
-                    className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 >
                     <Plus size={16} /> Add Page
                 </button>
@@ -607,10 +727,10 @@ const TenderPreview = () => {
 
             {/* Save Modal */}
             {isSaveModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md font-sans">
                         <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2">
-                            <Save className="w-5 h-5 text-blue-600" /> Save Document Version
+                            <Save className="w-5 h-5 text-purple-600" /> Save Document Version
                         </h3>
                         <p className="text-sm text-slate-500 mb-4">
                             Enter a descriptive name for this document version to easily recognize it in your saved versions list.
@@ -630,7 +750,7 @@ const TenderPreview = () => {
                                     value={saveName}
                                     onChange={(e) => setSaveName(e.target.value)}
                                     placeholder="e.g. Draft v1, Final Submission..."
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl mb-5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl mb-5 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
                                     required
                                 />
                                 {saveStatus === 'error' && (
@@ -640,14 +760,14 @@ const TenderPreview = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsSaveModalOpen(false)}
-                                        className="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
+                                        className="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors cursor-pointer"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={saveStatus === 'saving'}
-                                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium shadow-md shadow-blue-500/20 transition-all disabled:opacity-70 flex items-center gap-2"
+                                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium shadow-md shadow-purple-500/20 transition-all disabled:opacity-70 flex items-center gap-2 cursor-pointer"
                                     >
                                         {saveStatus === 'saving' && <RefreshCw size={16} className="animate-spin" />}
                                         Save Version
@@ -689,7 +809,7 @@ const TenderPreview = () => {
             <div className="pb-12">
                 <button
                     onClick={addNewPage}
-                    className="flex items-center gap-2 bg-white text-slate-700 border-2 border-dashed border-slate-300 hover:border-blue-500 hover:text-blue-600 px-8 py-3.5 rounded-2xl transition-all font-sans text-sm font-semibold hover:shadow-lg shadow-sm"
+                    className="flex items-center gap-2 bg-white text-slate-700 border-2 border-dashed border-slate-300 hover:border-purple-500 hover:text-purple-600 px-8 py-3.5 rounded-2xl transition-all font-sans text-sm font-semibold hover:shadow-lg shadow-xs cursor-pointer"
                 >
                     <Plus size={18} /> Add New Page
                 </button>

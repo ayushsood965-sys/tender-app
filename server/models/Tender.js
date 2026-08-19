@@ -56,6 +56,9 @@ const TenderSchema = new mongoose.Schema({
     warrantyConsumable: String,
     courtJurisdiction: String,
     selectedTermIds: [Number],
+    isAnnexureRequired: { type: Boolean, default: true },
+    selectedAnnexureIds: { type: [Number], default: [] },
+    annexureCustomData: { type: Object, default: {} },
     variables: Object,
     createdAt: { type: Date, default: Date.now },
 });
