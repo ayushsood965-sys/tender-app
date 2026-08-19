@@ -125,7 +125,7 @@ export default function TenderList() {
             if (type === "docx") {
                 await downloadDocumentAsDocx(doc, doc.name);
             } else {
-                await downloadDocumentAsPdf(doc.pages, doc.name);
+                await downloadDocumentAsPdf(doc, doc.name);
             }
         } catch (err) {
             alert(`Export failed: ${err.message}`);

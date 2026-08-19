@@ -14,31 +14,77 @@ export const sanitizeFilename = (name) => {
 };
 
 /**
- * Convert HTML Pages object to ordered array of HTML strings
+ * Convert HTML Pages object or array to ordered array of HTML strings
  */
 export const getOrderedPages = (pagesObj) => {
     if (!pagesObj) return [];
-    if (Array.isArray(pagesObj)) {
-        return pagesObj.map((p) => (typeof p === "string" ? p : p.html || ""));
+    if (pagesObj.pages) {
+        return getOrderedPages(pagesObj.pages);
     }
-    return Object.keys(pagesObj)
-        .sort((a, b) => parseInt(a) - parseInt(b))
-        .map((k) => pagesObj[k]);
+    if (Array.isArray(pagesObj)) {
+        return pagesObj
+            .map((p) => (typeof p === "string" ? p : p?.html || p?.content || ""))
+            .filter((p) => typeof p === "string" && p.trim().length > 0);
+    }
+    if (typeof pagesObj === "object") {
+        return Object.keys(pagesObj)
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .map((k) => (typeof pagesObj[k] === "string" ? pagesObj[k] : pagesObj[k]?.html || pagesObj[k]?.content || ""))
+            .filter((p) => typeof p === "string" && p.trim().length > 0);
+    }
+    if (typeof pagesObj === "string" && pagesObj.trim().length > 0) {
+        return [pagesObj];
+    }
+    return [];
 };
 
 /**
- * Export Saved Document as PDF (with triple green border, watermark, and X/Y footers)
+ * Export Saved Document as PDF (Direct Server ReportLab PDF with html2pdf fallback)
  */
-export const downloadDocumentAsPdf = async (doc, tender) => {
+export const downloadDocumentAsPdf = async (docOrId, tenderOrName) => {
     try {
-        const pages = getOrderedPages(doc.pages);
+        const docId =
+            typeof docOrId === "object" && docOrId !== null
+                ? docOrId.id
+                : typeof docOrId === "number" || (typeof docOrId === "string" && !isNaN(docOrId))
+                ? docOrId
+                : null;
+
+        const rawName =
+            typeof docOrId === "object" && docOrId !== null
+                ? docOrId.name || tenderOrName?.tenderName || tenderOrName
+                : typeof tenderOrName === "string"
+                ? tenderOrName
+                : tenderOrName?.tenderName;
+
+        const filename = `${sanitizeFilename(rawName || "Tender_Document")}.pdf`;
+
+        // 1. Try server-side direct ReportLab PDF first if doc has a database ID
+        if (docId) {
+            try {
+                const token = localStorage.getItem("hpu_token");
+                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+                const res = await fetch(`${API_URL}/documents/${docId}/pdf`, { headers });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    saveAs(blob, filename);
+                    return;
+                }
+            } catch (serverErr) {
+                console.warn("Backend PDF generation endpoint failed, falling back to client-side html2pdf:", serverErr);
+            }
+        }
+
+        // 2. Client-side html2pdf rendering fallback
+        const pagesObj = typeof docOrId === "object" && docOrId !== null ? docOrId.pages || docOrId : null;
+        const pages = getOrderedPages(pagesObj);
         if (pages.length === 0) {
             alert("No pages found in this document to export.");
             return;
         }
 
         const totalPages = pages.length;
-        const filename = `${sanitizeFilename(doc.name || tender?.tenderName || "Tender_Document")}.pdf`;
 
         // Create temporary container for rendering
         const container = document.createElement("div");
