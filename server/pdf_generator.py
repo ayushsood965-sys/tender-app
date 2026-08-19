@@ -2,102 +2,179 @@ import sys
 import os
 import json
 import io
+import base64
+import zipfile
+from bs4 import BeautifulSoup
+from xhtml2pdf import pisa
 
 if sys.stdout.encoding != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-from xhtml2pdf import pisa
+def is_annexure_content(html_str):
+    if not html_str:
+        return False
+    soup = BeautifulSoup(html_str, 'html.parser')
+    text = soup.get_text().upper()
+    keywords = ["ANNEXURE", "PROFORMA", "UNDERTAKING", "DECLARATION", "AFFIDAVIT", "BID FORM", "MANUFACTURER AUTHORIZATION"]
+    return any(k in text for k in keywords)
+
+def clean_html_for_pdf(html_str, logo_base64=None):
+    soup = BeautifulSoup(html_str, "html.parser")
+    
+    # Remove unsupported attributes like percentage heights
+    for tag in soup.find_all(True):
+        if tag.has_attr("height"):
+            del tag["height"]
+        if tag.has_attr("style"):
+            styles = tag["style"].split(";")
+            filtered_styles = [s for s in styles if not s.strip().startswith("height") and not s.strip().startswith("min-height")]
+            tag["style"] = "; ".join(filtered_styles)
+        
+        # Replace external wiki logos with local base64 logo if available
+        if tag.name == "img" and logo_base64:
+            src = tag.get("src", "")
+            if "wikimedia" in src or "upload.wikimedia" in src or not src or "hpu" in src.lower():
+                tag["src"] = f"data:image/png;base64,{logo_base64}"
+                tag["style"] = "height: 80px; width: auto; margin: 0 auto; display: block;"
+
+    return str(soup)
 
 def generate_pdf_from_json(input_json_path, output_pdf_path, logo_path, watermark_path):
     with open(input_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     pages = data.get("pages", [])
+    if not pages:
+        print("Error: No pages found in input JSON")
+        return False
 
-    # Clean HTML using BeautifulSoup to remove unsupported attributes (e.g. percentage heights on tables/cells)
-    cleaned_pages = []
-    for p in pages:
-        soup = BeautifulSoup(p, "html.parser")
-        for tag in soup.find_all(True):
-            if tag.has_attr("height"):
-                del tag["height"]
-            if tag.has_attr("style"):
-                # Remove height styles that cause TypeError in reportlab table calculation
-                styles = tag["style"].split(";")
-                filtered_styles = [s for s in styles if not s.strip().startswith("height") and not s.strip().startswith("min-height")]
-                tag["style"] = "; ".join(filtered_styles)
-        cleaned_pages.append(str(soup))
+    # Base64 encode logo and watermark images for zero-dependency embedding
+    logo_base64 = ""
+    if logo_path and os.path.exists(logo_path):
+        try:
+            with open(logo_path, "rb") as lf:
+                logo_base64 = base64.b64encode(lf.read()).decode("utf-8")
+        except Exception as e:
+            print(f"Warning: Could not read logo image: {e}")
 
-    # HTML page styling template compatible with xhtml2pdf / reportlab
-    custom_css = """
-    @page {
+    watermark_base64 = ""
+    if watermark_path and os.path.exists(watermark_path):
+        try:
+            with open(watermark_path, "rb") as wf:
+                watermark_base64 = base64.b64encode(wf.read()).decode("utf-8")
+        except Exception as e:
+            print(f"Warning: Could not read watermark image: {e}")
+
+    # CSS with triple green border, watermark, and footer
+    custom_css = f"""
+    @page {{
         size: a4 portrait;
-        margin: 12mm 12mm 15mm 12mm;
-        @frame content_frame {
-            left: 12mm;
-            top: 12mm;
-            width: 186mm;
-            height: 265mm;
-        }
-        @frame footer_frame {
-            left: 12mm;
-            top: 280mm;
-            width: 186mm;
-            height: 8mm;
-        }
-    }
-    body {
+        margin: 8mm 8mm 12mm 8mm;
+        @frame content_frame {{
+            left: 8mm;
+            top: 8mm;
+            width: 194mm;
+            height: 275mm;
+        }}
+        @frame footer_frame {{
+            left: 8mm;
+            top: 284mm;
+            width: 194mm;
+            height: 6mm;
+        }}
+    }}
+    body {{
         font-family: Helvetica, Arial, sans-serif;
         font-size: 10pt;
         line-height: 1.35;
-        color: #000;
-    }
-    .pdf-page {
-        page-break-after: always;
-    }
-    .pdf-page:last-child {
-        page-break-after: avoid;
-    }
-    .page-border-container {
-        border: 2pt solid #006400;
-        padding: 12pt;
-    }
-    table {
+        color: #000000;
+        margin: 0;
+        padding: 0;
+    }}
+    .pdf-page-container {{
+        width: 100%;
+        margin-bottom: 8pt;
+    }}
+    .annexure-page-break {{
+        page-break-before: always;
+    }}
+    .pdf-border-outer {{
+        border: 0.8pt solid #004821;
+        padding: 1.5pt;
+        margin-bottom: 6pt;
+    }}
+    .pdf-border-middle {{
+        border: 2.2pt solid #004821;
+        padding: 1.5pt;
+    }}
+    .pdf-border-inner {{
+        border: 0.8pt solid #004821;
+        padding: 16pt 18pt;
+        position: relative;
+        background-color: #ffffff;
+    }}
+    .watermark-container {{
+        text-align: center;
+        margin-bottom: -180pt;
+        opacity: 0.07;
+    }}
+    table {{
         width: 100%;
         border-collapse: collapse;
         margin-top: 4pt;
         margin-bottom: 6pt;
-    }
-    th, td {
-        border: 0.5pt solid #333;
-        padding: 4pt 5pt;
+    }}
+    th, td {{
+        border: 0.5pt solid #000000;
+        padding: 4pt 6pt;
         font-size: 8.5pt;
         vertical-align: top;
-    }
-    th {
+    }}
+    th {{
         background-color: #f0f0f0;
         font-weight: bold;
         text-align: left;
-    }
-    h1, h2, h3, h4 {
-        margin-top: 3pt;
+    }}
+    h1, h2, h3, h4, h5 {{
+        margin-top: 4pt;
         margin-bottom: 3pt;
-        color: #000;
-    }
-    .footer-num {
+        color: #000000;
+    }}
+    p {{
+        margin-top: 2pt;
+        margin-bottom: 4pt;
+        line-height: 1.35;
+    }}
+    .footer-num {{
         text-align: right;
         font-weight: bold;
         font-size: 8.5pt;
-        color: #555;
-    }
+        color: #000000;
+        padding-right: 4pt;
+    }}
     """
 
     body_html = ""
-    for idx, page_html in enumerate(cleaned_pages):
+    for idx, raw_page in enumerate(pages):
+        cleaned = clean_html_for_pdf(raw_page, logo_base64)
+        is_annex = is_annexure_content(cleaned)
+        page_break_class = "annexure-page-break" if (idx > 0 and is_annex) else ""
+
+        watermark_html = ""
+        if watermark_base64:
+            watermark_html = f'<div class="watermark-container"><img src="data:image/png;base64,{watermark_base64}" style="width: 320pt; height: auto;" /></div>'
+
         body_html += f"""
-        <div class="pdf-page">
-            <div class="page-border-container">
-                {page_html}
+        <div class="pdf-page-container {page_break_class}">
+            <div class="pdf-border-outer">
+                <div class="pdf-border-middle">
+                    <div class="pdf-border-inner">
+                        {watermark_html}
+                        <div class="page-content">
+                            {cleaned}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         """
@@ -134,10 +211,6 @@ def generate_pdf_from_json(input_json_path, output_pdf_path, logo_path, watermar
         print(f"Generated complete styled PDF -> {output_pdf_path}")
         return True
 
-import zipfile
-import docx
-from bs4 import BeautifulSoup
-
 def generate_portal_package_zip(input_json_path, output_zip_path, profile, logo_path, watermark_path):
     with open(input_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -153,7 +226,6 @@ def generate_portal_package_zip(input_json_path, output_zip_path, profile, logo_
     # 2. Build ZIP package
     with zipfile.ZipFile(output_zip_path, 'w') as zout:
         if profile == "two_cover":
-            # Separate technical pages vs financial bid page
             cover1_pages = []
             cover2_pages = []
 
@@ -165,18 +237,15 @@ def generate_portal_package_zip(input_json_path, output_zip_path, profile, logo_
                     cover1_pages.append(p)
 
             if not cover2_pages and len(pages) > 2:
-                # If no explicit financial marker found, last page is cover 2
                 cover2_pages = [pages[-1]]
                 cover1_pages = pages[:-1]
 
-            # Generate Cover 1 PDF
             c1_json = os.path.join(temp_dir, f"c1_{os.path.basename(output_zip_path)}.json")
             c1_pdf = os.path.join(temp_dir, f"c1_{os.path.basename(output_zip_path)}.pdf")
             with open(c1_json, 'w', encoding='utf-8') as f:
                 json.dump({"pages": cover1_pages}, f)
             generate_pdf_from_json(c1_json, c1_pdf, logo_path, watermark_path)
 
-            # Generate Cover 2 PDF
             c2_json = os.path.join(temp_dir, f"c2_{os.path.basename(output_zip_path)}.json")
             c2_pdf = os.path.join(temp_dir, f"c2_{os.path.basename(output_zip_path)}.pdf")
             with open(c2_json, 'w', encoding='utf-8') as f:
@@ -192,7 +261,6 @@ def generate_portal_package_zip(input_json_path, output_zip_path, profile, logo_
             if os.path.exists(c1_json): os.remove(c1_json)
             if os.path.exists(c2_json): os.remove(c2_json)
 
-            # Add Checklist / Metadata summary
             checklist_txt = f"""HIMACHAL PRADESH UNIVERSITY
 TWO-COVER TENDER SUBMISSION PACKAGE
 Tender Title: {doc_name}
@@ -208,7 +276,7 @@ IMPORTANT INSTRUCTION FOR BIDDERS:
 """
             zout.writestr("Submission_Instructions_Checklist.txt", checklist_txt)
 
-        else: # GeM Portal Profile
+        else:
             if os.path.exists(main_pdf_path):
                 zout.write(main_pdf_path, "GeM_ATC_Consolidated_Document.pdf")
 
