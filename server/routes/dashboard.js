@@ -5,7 +5,7 @@ const Term = require("../models/Term");
 const Tender = require("../models/Tender");
 const Annexure = require("../models/Annexure");
 
-router.get("/dashboard-data", async (req, res) => {
+router.get(["/dashboard", "/dashboard-data"], async (req, res) => {
     try {
         const categories = await Category.find();
         const terms = await Term.find();
