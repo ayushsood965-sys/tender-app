@@ -119,32 +119,53 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None, pa
                 p_img.add_run().add_picture(logo_path, width=Inches(1.6))
             continue
 
-        # 2. Flex Containers (e.g. "No. 1-5/2025/HPU/SPS" on Left, "Dated: ..." on Right)
+        # 2. Flex Containers (e.g. Left column / Right column in headers, signatures, and dates)
         if elem.name == 'div' and 'display: flex' in style_str:
-            spans = elem.find_all(['span', 'div', 'p'])
-            if len(spans) >= 2:
+            direct_children = [c for c in elem.children if isinstance(c, Tag)]
+            if len(direct_children) >= 2:
                 t_flex = doc.add_table(rows=1, cols=2)
                 t_flex.alignment = WD_TABLE_ALIGNMENT.CENTER
                 row = t_flex.rows[0]
                 row.cells[0].width = Inches(3.35)
                 row.cells[1].width = Inches(3.35)
                 
-                # Left item
+                # Left child
+                left_elem = direct_children[0]
                 p_left = row.cells[0].paragraphs[0]
                 p_left.paragraph_format.space_before = Pt(2)
-                p_left.paragraph_format.space_after = Pt(4)
-                process_inline_nodes(p_left, spans[0], font_name="Montserrat", font_size=Pt(10))
-                if len(p_left.runs) > 0:
-                    p_left.runs[0].font.bold = True
+                p_left.paragraph_format.space_after = Pt(2)
+                p_left.paragraph_format.line_spacing = 1.15
+                
+                left_ps = left_elem.find_all('p')
+                if left_ps:
+                    for i_p, lp in enumerate(left_ps):
+                        p_cur = p_left if i_p == 0 else row.cells[0].add_paragraph()
+                        p_cur.paragraph_format.space_before = Pt(1)
+                        p_cur.paragraph_format.space_after = Pt(1)
+                        p_cur.paragraph_format.line_spacing = 1.15
+                        process_inline_nodes(p_cur, lp, font_name="Montserrat", font_size=Pt(10))
+                else:
+                    process_inline_nodes(p_left, left_elem, font_name="Montserrat", font_size=Pt(10))
 
-                # Right item
+                # Right child
+                right_elem = direct_children[1]
                 p_right = row.cells[1].paragraphs[0]
                 p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                 p_right.paragraph_format.space_before = Pt(2)
-                p_right.paragraph_format.space_after = Pt(4)
-                process_inline_nodes(p_right, spans[1], font_name="Montserrat", font_size=Pt(10))
-                if len(p_right.runs) > 0:
-                    p_right.runs[0].font.bold = True
+                p_right.paragraph_format.space_after = Pt(2)
+                p_right.paragraph_format.line_spacing = 1.15
+                
+                right_ps = right_elem.find_all('p')
+                if right_ps:
+                    for i_p, rp in enumerate(right_ps):
+                        p_cur = p_right if i_p == 0 else row.cells[1].add_paragraph()
+                        p_cur.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                        p_cur.paragraph_format.space_before = Pt(1)
+                        p_cur.paragraph_format.space_after = Pt(1)
+                        p_cur.paragraph_format.line_spacing = 1.15
+                        process_inline_nodes(p_cur, rp, font_name="Montserrat", font_size=Pt(10))
+                else:
+                    process_inline_nodes(p_right, right_elem, font_name="Montserrat", font_size=Pt(10))
                 continue
 
         # 3. Styled Callout / Placeholder Highlight Boxes
@@ -310,20 +331,33 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None, pa
             process_inline_nodes(p, elem, font_name="Montserrat", font_size=Pt(10.5))
             continue
 
-        # 6. Tables (Summary, BOQ, Compliance Matrix, Key-Values)
+        # 6. Tables (Summary, BOQ, Compliance Matrix, Key-Values, Grand Total)
         if elem.name == 'table':
             trs = elem.find_all('tr')
             if not trs:
                 continue
 
+            def get_row_col_count(tr):
+                cnt = 0
+                for c in tr.find_all(['th', 'td']):
+                    try:
+                        cs = int(c.get('colspan', 1))
+                    except:
+                        cs = 1
+                    cnt += cs
+                return cnt
+
             num_rows = len(trs)
-            num_cols = max(len(tr.find_all(['th', 'td'])) for tr in trs)
+            num_cols = max(get_row_col_count(tr) for tr in trs) if trs else 1
+            if num_cols < 1:
+                num_cols = 1
+
             table = doc.add_table(rows=num_rows, cols=num_cols)
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
             # Column width distribution matching A4 printable box (6.7 inches)
             total_width = Inches(6.7)
-            if num_cols == 7: # Annexure-A Financial BOQ schedule
+            if num_cols == 7: # Financial BOQ schedule (Annexure-A / Annexure-II)
                 col_widths = [Inches(0.5), Inches(1.6), Inches(1.8), Inches(0.6), Inches(0.8), Inches(0.6), Inches(0.8)]
             elif num_cols == 4: # Technical Compliance matrix
                 col_widths = [Inches(0.6), Inches(3.0), Inches(2.0), Inches(1.1)]
@@ -335,37 +369,61 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None, pa
                 col_widths = [total_width / num_cols] * num_cols
 
             for r_idx, tr in enumerate(trs):
-                cells = tr.find_all(['th', 'td'])
+                cells_data = tr.find_all(['th', 'td'])
                 row = table.rows[r_idx]
                 is_header = (r_idx == 0 and tr.find('th') is not None)
 
-                for c_idx, cell_data in enumerate(cells):
-                    if c_idx >= num_cols:
+                col_idx = 0
+                for cell_data in cells_data:
+                    if col_idx >= num_cols:
                         break
-                    cell = row.cells[c_idx]
-                    cell.width = col_widths[c_idx]
 
-                    set_cell_border(cell,
-                        top={'sz': 4, 'val': 'single', 'color': '000000'},
-                        bottom={'sz': 4, 'val': 'single', 'color': '000000'},
-                        left={'sz': 4, 'val': 'single', 'color': '000000'},
-                        right={'sz': 4, 'val': 'single', 'color': '000000'}
-                    )
+                    try:
+                        colspan = int(cell_data.get('colspan', 1))
+                    except:
+                        colspan = 1
+                    colspan = max(1, min(colspan, num_cols - col_idx))
 
-                    set_cell_margins(cell, top=60, bottom=60, left=100, right=100)
+                    cell_style = cell_data.get('style', '')
 
-                    if is_header or cell_data.name == 'th':
-                        set_cell_shading(cell, "F0F0F0")
+                    # Set borders and margins on all cells in the span
+                    for span_i in range(col_idx, col_idx + colspan):
+                        c_target = row.cells[span_i]
+                        c_target.width = col_widths[span_i]
+                        set_cell_border(c_target,
+                            top={'sz': 4, 'val': 'single', 'color': '000000'},
+                            bottom={'sz': 4, 'val': 'single', 'color': '000000'},
+                            left={'sz': 4, 'val': 'single', 'color': '000000'},
+                            right={'sz': 4, 'val': 'single', 'color': '000000'}
+                        )
+                        set_cell_margins(c_target, top=60, bottom=60, left=100, right=100)
+                        if is_header or cell_data.name == 'th' or 'background: #f0f0f0' in cell_style or 'background-color: #f0f0f0' in cell_style:
+                            set_cell_shading(c_target, "F0F0F0")
 
-                    p = cell.paragraphs[0]
+                    if colspan > 1:
+                        target_cell = row.cells[col_idx].merge(row.cells[col_idx + colspan - 1])
+                    else:
+                        target_cell = row.cells[col_idx]
+
+                    p = target_cell.paragraphs[0]
                     p.paragraph_format.space_before = Pt(2)
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.line_spacing = 1.1
 
+                    # Alignment
+                    if 'text-align: right' in cell_style or 'grand total' in cell_data.get_text().lower():
+                        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    elif 'text-align: center' in cell_style:
+                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    else:
+                        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
                     process_inline_nodes(p, cell_data, font_name="Montserrat", font_size=Pt(9.5))
-                    if is_header or cell_data.name == 'th':
+                    if is_header or cell_data.name == 'th' or 'bold' in cell_style or 'grand total' in cell_data.get_text().lower():
                         for r in p.runs:
                             r.font.bold = True
+
+                    col_idx += colspan
 
             # Add a small spacing paragraph after table
             p_space = doc.add_paragraph()
