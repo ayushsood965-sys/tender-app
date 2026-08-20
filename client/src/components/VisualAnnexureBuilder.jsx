@@ -213,9 +213,16 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                 if (b.subtext) html += `    <p style="font-size: 9.5pt; color: #475569; margin-top: 3px;">${b.subtext}</p>\n`;
                 html += `  </div>\n`;
             } else if (b.type === "recipient") {
-                html += `  <p style="margin-bottom: 10px;"><strong>To</strong><br/>The ${b.authority || "{{tenderInvitingAuthority}}" },<br/>${b.department || "{{departmentName}}"},<br/>${b.university || "Himachal Pradesh University, Shimla - 171005"}.</p>\n`;
-                if (b.subject) html += `  <p style="margin-bottom: 10px;"><strong>Subject:</strong> ${b.subject}</p>\n`;
-                html += `  <p style="margin-bottom: 10px;">Sir/Madam,</p>\n`;
+                html += `  <div style="margin-bottom: 12px; text-align: left;">\n`;
+                html += `    <p style="margin-bottom: 2px;"><strong>To</strong></p>\n`;
+                html += `    <div style="margin-left: 28px; text-align: left;">\n`;
+                html += `      <p style="margin-bottom: 2px;">The ${b.authority || "{{tenderInvitingAuthority}}" },</p>\n`;
+                html += `      <p style="margin-bottom: 2px;">${b.department || "{{departmentName}}"},</p>\n`;
+                html += `      <p style="margin-bottom: 2px;">${b.university || "Himachal Pradesh University, Shimla - 171005"}.</p>\n`;
+                html += `    </div>\n`;
+                html += `  </div>\n`;
+                if (b.subject) html += `  <p style="margin-bottom: 10px; text-align: left;"><strong>Subject:</strong> ${b.subject}</p>\n`;
+                html += `  <p style="margin-bottom: 10px; text-align: left;">Sir/Madam,</p>\n`;
             } else if (b.type === "paragraph") {
                 html += `  <p style="margin-bottom: 10px;">${b.text}</p>\n`;
             } else if (b.type === "placeholder_box") {

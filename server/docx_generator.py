@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import json
 import docx
 from docx.shared import Inches, Pt, RGBColor
@@ -95,7 +96,7 @@ def process_inline_nodes(p, elem, font_name="Montserrat", font_size=Pt(10.5), de
             elif default_color:
                 r.font.color.rgb = default_color
 
-def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None):
+def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None, parent_indent=None):
     """Parse HTML elements into python-docx paragraphs, callout boxes, and tables matching the web preview"""
     
     # Iterate through top-level block elements
@@ -248,18 +249,63 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None):
             if not text:
                 continue
 
+            t_low = text.lower()
+            is_to_header = (text == 'To' or text == 'To:' or t_low.startswith('to\n') or t_low.startswith('to<br'))
+            is_salutation = (text.startswith('Sir') or text.startswith('Dear Sir') or text.startswith('Madam') or text.startswith('Sir/Madam'))
+            is_subject = (text.startswith('Subject:') or text.startswith('Ref:') or text.startswith('Dated:') or text.startswith('Date:') or text.startswith('Place:'))
+            is_closing = (text.startswith('Yours faithfully') or text.startswith('Authorized Signatory') or text.startswith('DEPONENT'))
+            
+            # If the paragraph has inline <br> tags (e.g. combined "To" + recipient address lines)
+            br_tags = elem.find_all('br')
+            if br_tags and (is_to_header or 'himachal pradesh' in t_low or 'the ' in t_low or 'dated:' in t_low or '__________' in text):
+                raw_html = elem.decode_contents()
+                lines = [line.strip() for line in re.split(r'<br\s*/?>', raw_html, flags=re.I) if line.strip()]
+                for idx_l, line_html in enumerate(lines):
+                    line_soup = BeautifulSoup(line_html, 'html.parser')
+                    line_t = line_soup.get_text().strip()
+                    if not line_t:
+                        continue
+                    p_line = doc.add_paragraph()
+                    p_line.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    p_line.paragraph_format.space_before = Pt(1)
+                    p_line.paragraph_format.space_after = Pt(1)
+                    p_line.paragraph_format.line_spacing = 1.15
+                    
+                    if line_t.lower() == 'to' or '<strong>to</strong>' in line_html.lower() or line_t.lower().startswith('dated:'):
+                        p_line.paragraph_format.left_indent = Inches(0)
+                        if line_t.lower() == 'to' or '<strong>to</strong>' in line_html.lower():
+                            p_line.paragraph_format.space_after = Pt(2)
+                    else:
+                        # 1 official tab indent (0.4 inch)
+                        p_line.paragraph_format.left_indent = Inches(0.4)
+                    
+                    process_inline_nodes(p_line, line_soup, font_name="Montserrat", font_size=Pt(10.5))
+                continue
+
             p = doc.add_paragraph()
             align = WD_ALIGN_PARAGRAPH.LEFT
+            
             if 'text-align: center' in style_str or parent_align == 'center':
                 align = WD_ALIGN_PARAGRAPH.CENTER
             elif 'text-align: right' in style_str or parent_align == 'right':
                 align = WD_ALIGN_PARAGRAPH.RIGHT
-            elif 'text-align: justify' in style_str or parent_align == 'justify' or len(text) > 80:
+            elif is_to_header or is_salutation or is_subject or is_closing or parent_align == 'left' or 'text-align: left' in style_str:
+                align = WD_ALIGN_PARAGRAPH.LEFT
+            elif 'text-align: justify' in style_str or (parent_align == 'justify' and len(text) > 80):
                 align = WD_ALIGN_PARAGRAPH.JUSTIFY
 
             p.alignment = align
-            p.paragraph_format.space_before = Pt(2)
-            p.paragraph_format.space_after = Pt(3.5)
+            
+            # Check indentation (1 tab indent for official address/details)
+            has_local_indent = ('margin-left' in style_str or 'padding-left' in style_str)
+            if has_local_indent or parent_indent:
+                p.paragraph_format.left_indent = parent_indent or Inches(0.4)
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1.5)
+            else:
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(3.5)
+            
             p.paragraph_format.line_spacing = 1.15
             process_inline_nodes(p, elem, font_name="Montserrat", font_size=Pt(10.5))
             continue
@@ -334,10 +380,16 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None):
                 align = 'right'
             elif 'text-align: center' in style_str:
                 align = 'center'
+            elif 'text-align: left' in style_str:
+                align = 'left'
             elif 'text-align: justify' in style_str:
                 align = 'justify'
             else:
                 align = parent_align
+
+            current_indent = parent_indent
+            if 'margin-left' in style_str or 'padding-left' in style_str:
+                current_indent = Inches(0.4)
 
             # Check if div contains only text nodes directly
             direct_text = "".join([str(c) for c in elem.children if isinstance(c, NavigableString)]).strip()
@@ -351,12 +403,17 @@ def parse_html_elements_to_docx(soup, doc, logo_path=None, parent_align=None):
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 elif align == 'justify':
                     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                else:
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                
+                if current_indent:
+                    p.paragraph_format.left_indent = current_indent
                 p.paragraph_format.space_before = Pt(2)
                 p.paragraph_format.space_after = Pt(3.5)
                 p.paragraph_format.line_spacing = 1.15
                 process_inline_nodes(p, elem, font_name="Montserrat", font_size=Pt(10.5))
             else:
-                parse_html_elements_to_docx(elem, doc, logo_path, parent_align=align)
+                parse_html_elements_to_docx(elem, doc, logo_path, parent_align=align, parent_indent=current_indent)
 
 def is_annexure_page(html):
     """Detect if the page is a discrete Annexure proforma/letter that requires its own fresh page"""
