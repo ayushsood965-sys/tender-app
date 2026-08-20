@@ -931,14 +931,16 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <SearchableSelect
-                                label="Opening Venue / Office"
-                                allowCustom={true}
-                                options={HPU_VENUES}
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                Opening Venue / Office
+                            </label>
+                            <input
+                                type="text"
+                                name="openingVenue"
                                 value={formData.openingVenue}
-                                onChange={(val) => setFormData((prev) => ({ ...prev, openingVenue: val }))}
-                                placeholder="Search or type opening venue..."
-                                searchPlaceholder="Live search venue..."
+                                onChange={handleChange}
+                                placeholder="e.g. Store Purchase Office or Committee Room, VC Office"
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900"
                             />
                         </div>
                     </div>
