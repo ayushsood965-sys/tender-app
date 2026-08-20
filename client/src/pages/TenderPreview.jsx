@@ -596,16 +596,37 @@ const TenderPreview = () => {
         // -------------------------------------------------------------
         if (tender.isAnnexureRequired !== false) {
             const ROMAN_NUMS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"];
-            const toRoman = (num) => ROMAN_NUMS[num - 1] || `${num}`;
+            const toRoman = (num) => {
+                if (num <= ROMAN_NUMS.length) return ROMAN_NUMS[num - 1];
+                const lookup = { M:1000, CM:900, D:500, CD:400, C:100, XC:90, L:50, XL:40, X:10, IX:9, V:5, IV:4, I:1 };
+                let roman = '';
+                for (let i in lookup) {
+                    while (num >= lookup[i]) {
+                        roman += i;
+                        num -= lookup[i];
+                    }
+                }
+                return roman || `${num}`;
+            };
 
-            const selectedAnnexIds = (tender.selectedAnnexureIds || []).map(aId => Number(aId));
-            let selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.includes(Number(a.id)));
+            const selectedAnnexIds = new Set((tender.selectedAnnexureIds || []).map(aId => String(aId)));
+            // Ensure any annexures linked to selected terms are also included
+            (selectedTerms || []).forEach(term => {
+                if (term.hasAnnexure && term.annexureId) {
+                    selectedAnnexIds.add(String(term.annexureId));
+                }
+                if (term.linkedAnnexureId) {
+                    selectedAnnexIds.add(String(term.linkedAnnexureId));
+                }
+            });
 
-            // Separate compliance sheet templates if already in list to avoid duplication
+            const selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.has(String(a.id)));
+
+            // Filter out only duplicate templates of the eligibility fact sheet itself so Annexure-I is not duplicated
             const otherAnnexures = selectedAnnexList.filter(a =>
-                !a.title.toLowerCase().includes("compliance sheet") &&
-                a.code !== "ANNEX_COMPLIANCE_FACT" &&
-                a.code !== "ANNEX_TECH_COMPLIANCE" // Annexure-X Tech Specs is kept as a separate annexure, only eligibility fact sheet is merged
+                !a.title.toLowerCase().includes("eligibility fact sheet") &&
+                !a.title.toLowerCase().includes("compliance sheet of eligibility") &&
+                a.code !== "ANNEX_COMPLIANCE_FACT"
             );
 
             // 1. Gather all Document Proof items from selected terms
@@ -662,7 +683,7 @@ const TenderPreview = () => {
                 `;
             });
 
-            // Second: Dynamic Annexure Rows (Numbered Annexure-II, Annexure-III, etc.)
+            // Second: ALL Dynamic Annexure Rows (Numbered Annexure-II, Annexure-III, Annexure-IV, ...)
             otherAnnexures.forEach((annex, idx) => {
                 const assignedRoman = toRoman(idx + 2);
                 const cleanTitle = annex.title.replace(/^Annexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+\s*[:–-]?\s*/i, "").trim();
