@@ -14,45 +14,102 @@ import {
     Eye,
     Sparkles,
     Check,
+    HelpCircle,
+    LayoutGrid,
+    ListFilter,
 } from "lucide-react";
+import SearchableSelect from "./SearchableSelect";
 
 const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) => {
-    const [title, setTitle] = useState(initialData?.title || "");
-    const [code, setCode] = useState(initialData?.code || "");
-    const [category, setCategory] = useState(initialData?.category || "general");
-    const [applicableDocTypes, setApplicableDocTypes] = useState(initialData?.applicableDocTypes || ["all"]);
-    const [description, setDescription] = useState(initialData?.description || "");
+    const [title, setTitle] = useState("");
+    const [code, setCode] = useState("");
+    const [category, setCategory] = useState("general");
+    const [applicableDocTypes, setApplicableDocTypes] = useState(["all"]);
+    const [description, setDescription] = useState("");
     const [changelog, setChangelog] = useState("");
 
     // Initial blocks
-    const [blocks, setBlocks] = useState([
-        {
-            id: 1,
-            type: "header",
-            annexNumber: "Annexure-X",
-            heading: "PROFORMA OF DECLARATION / UNDERTAKING",
-            subtext: "(To be submitted on Bidder's Official Letterhead)",
-        },
-        {
-            id: 2,
-            type: "recipient",
-            authority: "{{tenderInvitingAuthority}}",
-            department: "{{departmentName}}",
-            university: "Himachal Pradesh University, Summer Hill, Shimla - 171005",
-            subject: "Undertaking for Tender No. {{tenderNo}} regarding {{tenderName}}",
-        },
-        {
-            id: 3,
-            type: "paragraph",
-            text: "I/We, the undersigned, hereby declare that our firm has carefully examined the tender specifications for {{tenderName}} under Tender Ref. {{tenderNo}} and accept all terms without any reservations.",
-        },
-        {
-            id: 4,
-            type: "signatures",
-            leftTitle: "Date & Place",
-            rightTitle: "Authorized Signatory with Seal",
+    const [blocks, setBlocks] = useState([]);
+
+    useEffect(() => {
+        if (initialData) {
+            setTitle(initialData.title || "");
+            setCode(initialData.code || "");
+            setCategory(initialData.category || "general");
+            setApplicableDocTypes(initialData.applicableDocTypes || ["all"]);
+            setDescription(initialData.description || "");
+
+            // If initialData has blocks, load them, otherwise default blocks
+            if (initialData.blocks && Array.isArray(initialData.blocks) && initialData.blocks.length > 0) {
+                setBlocks(initialData.blocks);
+            } else {
+                setBlocks([
+                    {
+                        id: 1,
+                        type: "header",
+                        annexNumber: initialData.title?.split(":")[0]?.trim() || "Annexure",
+                        heading: initialData.title?.split(":")[1]?.trim() || initialData.title || "PROFORMA OF DECLARATION / UNDERTAKING",
+                        subtext: "(To be submitted on Bidder's Official Letterhead)",
+                    },
+                    {
+                        id: 2,
+                        type: "recipient",
+                        authority: "{{tenderInvitingAuthority}}",
+                        department: "{{departmentName}}",
+                        university: "Himachal Pradesh University, Summer Hill, Shimla - 171005",
+                        subject: "Submission of Tender Documents for {{tenderName}} (Tender No. {{tenderNo}})",
+                    },
+                    {
+                        id: 3,
+                        type: "paragraph",
+                        text: "I/We, the undersigned, hereby declare that our firm has carefully examined the tender specifications and terms for {{tenderName}} under Tender Ref. {{tenderNo}} and agree to abide by all requirements unconditionally.",
+                    },
+                    {
+                        id: 4,
+                        type: "signatures",
+                        leftTitle: "Date & Place",
+                        rightTitle: "Authorized Signatory with Official Seal",
+                    }
+                ]);
+            }
+        } else {
+            setTitle("");
+            setCode(`ANNEX_${Date.now()}`);
+            setCategory("general");
+            setApplicableDocTypes(["all"]);
+            setDescription("");
+            setBlocks([
+                {
+                    id: 1,
+                    type: "header",
+                    annexNumber: "Annexure",
+                    heading: "PROFORMA OF DECLARATION / UNDERTAKING",
+                    subtext: "(To be submitted on Bidder's Official Letterhead)",
+                },
+                {
+                    id: 2,
+                    type: "recipient",
+                    authority: "{{tenderInvitingAuthority}}",
+                    department: "{{departmentName}}",
+                    university: "Himachal Pradesh University, Summer Hill, Shimla - 171005",
+                    subject: "Submission of Tender Documents for {{tenderName}} (Tender No. {{tenderNo}})",
+                },
+                {
+                    id: 3,
+                    type: "paragraph",
+                    text: "I/We, the undersigned, hereby declare that our firm has carefully examined the tender specifications for {{tenderName}} under Tender Ref. {{tenderNo}} and accept all terms without any reservations.",
+                },
+                {
+                    id: 4,
+                    type: "signatures",
+                    leftTitle: "Date & Place",
+                    rightTitle: "Authorized Signatory with Official Seal",
+                }
+            ]);
         }
-    ]);
+    }, [initialData, isOpen]);
+
+    const [customVarInput, setCustomVarInput] = useState("");
 
     const VARIABLE_CHIPS = [
         { label: "Tender Name", token: "{{tenderName}}" },
@@ -62,25 +119,54 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
         { label: "EMD Amount", token: "{{emdAmount}}" },
         { label: "PBG Amount", token: "{{pbgAmount}}" },
         { label: "Bid Validity", token: "{{bidValidity}}" },
+        { label: "Delivery Days", token: "{{deliveryDays}}" },
+        { label: "Delivery Location", token: "{{delivery_location}}" },
+        { label: "Warranty Years", token: "{{warranty_years}}" },
         { label: "Jurisdiction", token: "{{courtJurisdiction}}" },
     ];
 
     const addBlock = (type) => {
         const newId = Date.now();
         if (type === "header") {
-            setBlocks([...blocks, { id: newId, type: "header", annexNumber: "Annexure", heading: "TITLE", subtext: "" }]);
+            setBlocks([...blocks, { id: newId, type: "header", annexNumber: "Annexure", heading: "PROFORMA TITLE", subtext: "(To be submitted on Official Letterhead)" }]);
+        } else if (type === "recipient") {
+            setBlocks([...blocks, {
+                id: newId,
+                type: "recipient",
+                authority: "{{tenderInvitingAuthority}}",
+                department: "{{departmentName}}",
+                university: "Himachal Pradesh University, Shimla - 171005",
+                subject: "Regarding {{tenderName}} (Tender Ref: {{tenderNo}})"
+            }]);
         } else if (type === "paragraph") {
             setBlocks([...blocks, { id: newId, type: "paragraph", text: "Enter your legal clause text here..." }]);
+        } else if (type === "placeholder_box") {
+            setBlocks([...blocks, { id: newId, type: "placeholder_box", text: "please add the technical specs table here" }]);
         } else if (type === "stamp_box") {
             setBlocks([...blocks, { id: newId, type: "stamp_box", value: "50", text: "On ₹ 50/- Non-Judicial Stamp Paper Duly Notarized" }]);
+        } else if (type === "key_values") {
+            setBlocks([...blocks, {
+                id: newId,
+                type: "key_values",
+                title: "Bidder Organizational Profile Details",
+                items: [
+                    { label: "Name of the Bidder / Firm", value: "___________________________" },
+                    { label: "Complete Registered Office Address", value: "___________________________" },
+                    { label: "Name & Mobile of Authorized Signatory", value: "___________________________" },
+                    { label: "Official Email Address", value: "___________________________" },
+                    { label: "GSTIN Registration Number", value: "___________________________" },
+                    { label: "Permanent Account Number (PAN)", value: "___________________________" },
+                    { label: "Bank Account No & IFSC Code", value: "___________________________" },
+                ]
+            }]);
         } else if (type === "table") {
             setBlocks([...blocks, {
                 id: newId,
                 type: "table",
                 columns: ["Sr. No.", "Item Specification / Requirement", "Offered Parameter", "Compliance (Yes/No)"],
                 rows: [
-                    ["1.", "Standard Parameters as per Scope", "", "Yes"],
-                    ["2.", "Warranty Period Compliance", "", "Yes"],
+                    ["1.", "Standard Technical Specifications as per Schedule", "", "Yes"],
+                    ["2.", "Complete On-site Warranty (3 Years)", "", "Yes"],
                 ]
             }]);
         } else if (type === "signatures") {
@@ -117,30 +203,42 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
 
     // Compile Blocks to Standard Clean HTML
     const compileToHtml = () => {
-        let html = `<div style="font-size: 11pt; line-height: 1.5; color: #000; text-align: justify;">\n`;
+        let html = `<div style="font-size: 10.5pt; line-height: 1.5; color: #000; text-align: justify;">\n`;
 
         blocks.forEach(b => {
             if (b.type === "header") {
                 html += `  <div style="text-align: center; margin-bottom: 14px;">\n`;
                 if (b.annexNumber) html += `    <h2 style="font-size: 17px; font-weight: bold; text-decoration: underline; margin-bottom: 3px;">${b.annexNumber}</h2>\n`;
-                if (b.heading) html += `    <h3 style="font-size: 15px; font-weight: bold;">${b.heading}</h3>\n`;
-                if (b.subtext) html += `    <p style="font-size: 10pt; color: #555;">${b.subtext}</p>\n`;
+                if (b.heading) html += `    <h3 style="font-size: 15px; font-weight: bold; text-transform: uppercase;">${b.heading}</h3>\n`;
+                if (b.subtext) html += `    <p style="font-size: 9.5pt; color: #475569; margin-top: 3px;">${b.subtext}</p>\n`;
                 html += `  </div>\n`;
             } else if (b.type === "recipient") {
                 html += `  <p style="margin-bottom: 10px;"><strong>To</strong><br/>The ${b.authority || "{{tenderInvitingAuthority}}" },<br/>${b.department || "{{departmentName}}"},<br/>${b.university || "Himachal Pradesh University, Shimla - 171005"}.</p>\n`;
-                if (b.subject) html += `  <p style="margin-bottom: 12px;"><strong>Subject:</strong> ${b.subject}</p>\n`;
+                if (b.subject) html += `  <p style="margin-bottom: 10px;"><strong>Subject:</strong> ${b.subject}</p>\n`;
                 html += `  <p style="margin-bottom: 10px;">Sir/Madam,</p>\n`;
             } else if (b.type === "paragraph") {
                 html += `  <p style="margin-bottom: 10px;">${b.text}</p>\n`;
+            } else if (b.type === "placeholder_box") {
+                html += `  <div style="padding: 24px; border: 1.5px dashed #94a3b8; border-radius: 8px; text-align: center; margin-top: 20px; margin-bottom: 24px; background: #f8fafc;">\n    <p style="font-size: 11pt; font-weight: bold; color: #334155; margin: 0;">${b.text}</p>\n  </div>\n`;
             } else if (b.type === "stamp_box") {
-                html += `  <div style="background-color: #f8fafc; border: 1.5px dashed #cbd5e1; padding: 10px; text-align: center; margin-bottom: 14px; font-weight: bold; font-size: 10pt; color: #334155;">[ ${b.text} ]</div>\n`;
+                html += `  <div style="background-color: #f8fafc; border: 1.5px dashed #cbd5e1; padding: 10px; text-align: center; margin-bottom: 14px; font-weight: bold; font-size: 9.5pt; color: #334155;">[ ${b.text} ]</div>\n`;
+            } else if (b.type === "key_values") {
+                html += `  <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">\n`;
+                if (b.title) {
+                    html += `    <thead><tr><th colspan="2" style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; text-align: left; font-weight: bold;">${b.title}</th></tr></thead>\n`;
+                }
+                html += `    <tbody>\n`;
+                (b.items || []).forEach(item => {
+                    html += `      <tr><td style="border: 1px solid black; padding: 6px 8px; width: 40%; font-weight: 600;">${item.label}</td><td style="border: 1px solid black; padding: 6px 8px;">${item.value}</td></tr>\n`;
+                });
+                html += `    </tbody>\n  </table>\n`;
             } else if (b.type === "table") {
-                html += `  <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10pt;">\n    <thead>\n      <tr>\n`;
-                b.columns.forEach(col => {
+                html += `  <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">\n    <thead>\n      <tr>\n`;
+                (b.columns || []).forEach(col => {
                     html += `        <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; font-weight: bold;">${col}</th>\n`;
                 });
                 html += `      </tr>\n    </thead>\n    <tbody>\n`;
-                b.rows.forEach(row => {
+                (b.rows || []).forEach(row => {
                     html += `      <tr>\n`;
                     row.forEach(cell => {
                         html += `        <td style="border: 1px solid black; padding: 6px 8px;">${cell}</td>\n`;
@@ -149,9 +247,9 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                 });
                 html += `    </tbody>\n  </table>\n`;
             } else if (b.type === "signatures") {
-                html += `  <div style="display: flex; justify-content: space-between; margin-top: 36px;">\n`;
+                html += `  <div style="display: flex; justify-content: space-between; margin-top: 32px; font-size: 9.5pt;">\n`;
                 html += `    <div><p><strong>Date:</strong> _ _ / _ _ / 2026<br/><strong>Place:</strong> ______________</p></div>\n`;
-                html += `    <div style="text-align: right;"><p style="margin-bottom: 24px;"><strong>Authorized Signatory:</strong> ___________________________</p><p><strong>${b.rightTitle || "Name & Seal"}:</strong> _________________________</p></div>\n`;
+                html += `    <div style="text-align: right;"><p style="margin-bottom: 22px;"><strong>Authorized Signatory:</strong> ___________________________</p><p><strong>${b.rightTitle || "Name & Official Seal"}:</strong> _________________________</p></div>\n`;
                 html += `  </div>\n`;
             }
         });
@@ -175,8 +273,9 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
             applicableDocTypes: applicableDocTypes,
             description: description || `Visual Proforma Annexure format: ${title}`,
             contentTemplate: generatedHtml,
-            changelog: changelog || "Created via Visual Block Builder",
-            isMaster: false,
+            blocks: blocks,
+            changelog: changelog || "Created / Updated via Visual Block Builder",
+            isMaster: initialData?.isMaster !== undefined ? initialData.isMaster : false,
         };
 
         onSave(payload);
@@ -184,7 +283,35 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
 
     if (!isOpen) return null;
 
-    const compiledPreview = compileToHtml();
+    const SAMPLE_PREVIEW_MAP = {
+        tenderName: "High Resolution Analytical Equipment",
+        tenderNo: "No. 1-5/2026/HPU/SPS",
+        departmentName: "Department of Physics",
+        departmentEmail: "physicshpu@gmail.com",
+        tenderInvitingAuthority: "Store Purchase Officer",
+        estimatedCost: "2,29,000",
+        emdAmount: "5,000",
+        pbgAmount: "10,000",
+        bidValidity: "90 Days",
+        deliveryDays: "15 Days",
+        delivery_location: "Science Workshop, HPU Campus, Shimla-171005",
+        warranty_years: "3 Years",
+        courtJurisdiction: "Courts in Shimla Urban",
+    };
+
+    const getRenderedPreviewHtml = () => {
+        let previewHtml = compileToHtml();
+        Object.entries(SAMPLE_PREVIEW_MAP).forEach(([key, val]) => {
+            const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+            previewHtml = previewHtml.replace(regex, `<span style="background-color: #fef3c7; color: #78350f; font-weight: 600; padding: 1px 4px; border-radius: 4px; border: 1px solid #fde68a;">${val}</span>`);
+        });
+        // For any remaining custom {{tokens}}, highlight them gracefully so user sees the dynamic token name
+        previewHtml = previewHtml.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, token) => {
+            const label = token.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+            return `<span style="background-color: #ede9fe; color: #5b21b6; font-family: monospace; font-size: 8.5pt; font-weight: bold; padding: 1px 5px; border-radius: 4px; border: 1px solid #ddd6fe;">[${label}]</span>`;
+        });
+        return previewHtml;
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto font-sans">
@@ -197,7 +324,7 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-900">Visual Annexure & Proforma Builder</h2>
-                            <p className="text-xs text-slate-500">Construct custom proformas using visual blocks without writing HTML code.</p>
+                            <p className="text-xs text-slate-500">Construct custom official annexures using modular building blocks.</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer">
@@ -217,37 +344,41 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="e.g. Annexure-XII: Declaration of Ethical Standards"
+                                    placeholder="e.g. Annexure-XI: Declaration of Ethical Standards"
                                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Category</label>
-                                <select
+                                <SearchableSelect
+                                    label="Category"
+                                    options={[
+                                        { value: "general", label: "General", badge: "Standard" },
+                                        { value: "undertaking", label: "Undertaking / Declaration", badge: "Legal" },
+                                        { value: "eligibility", label: "Eligibility / MAF", badge: "Technical" },
+                                        { value: "financial", label: "Financial", badge: "Commercial" },
+                                        { value: "technical", label: "Technical", badge: "Specs" },
+                                        { value: "custom", label: "Custom", badge: "Department" },
+                                    ]}
                                     value={category}
-                                    onChange={(e) => setCategory(e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
-                                >
-                                    <option value="general">General</option>
-                                    <option value="undertaking">Undertaking / Declaration</option>
-                                    <option value="eligibility">Eligibility / MAF</option>
-                                    <option value="financial">Financial</option>
-                                    <option value="technical">Technical</option>
-                                    <option value="custom">Custom</option>
-                                </select>
+                                    onChange={(val) => setCategory(val || "general")}
+                                    placeholder="Select Category..."
+                                    searchPlaceholder="Search category..."
+                                />
                             </div>
                             <div>
-                                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Applicable Document Types</label>
-                                <select
+                                <SearchableSelect
+                                    label="Applicable Document Types"
+                                    options={[
+                                        { value: "all", label: "All Document Types", badge: "Universal" },
+                                        { value: "Limited Tender Document", label: "Limited Tender Document", badge: "Sealed Quotations" },
+                                        { value: "GeM ATC Document", label: "GeM ATC Document", badge: "GeM Portal" },
+                                        { value: "e-tender Document", label: "e-tender Document", badge: "e-Procurement" },
+                                    ]}
                                     value={applicableDocTypes[0] || "all"}
-                                    onChange={(e) => setApplicableDocTypes([e.target.value])}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
-                                >
-                                    <option value="all">All Document Types</option>
-                                    <option value="Limited Tender Document">Limited Tender Document</option>
-                                    <option value="GeM ATC Document">GeM ATC Document</option>
-                                    <option value="e-tender Document">e-tender Document</option>
-                                </select>
+                                    onChange={(val) => setApplicableDocTypes([val || "all"])}
+                                    placeholder="Select format..."
+                                    searchPlaceholder="Search format..."
+                                />
                             </div>
                         </div>
 
@@ -264,10 +395,31 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                                 </button>
                                 <button
                                     type="button"
+                                    onClick={() => addBlock("recipient")}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                    <Plus size={13} /> Letter To
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => addBlock("paragraph")}
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
                                 >
-                                    <Plus size={13} /> Legal Paragraph
+                                    <Plus size={13} /> Paragraph
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => addBlock("placeholder_box")}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                    <Sparkles size={13} /> Placeholder Box
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => addBlock("key_values")}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                    <LayoutGrid size={13} /> Profile Grid
                                 </button>
                                 <button
                                     type="button"
@@ -281,14 +433,14 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                                     onClick={() => addBlock("table")}
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
                                 >
-                                    <Table size={13} /> Compliance Table
+                                    <Table size={13} /> Table
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => addBlock("signatures")}
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
                                 >
-                                    <Plus size={13} /> Signature Block
+                                    <Plus size={13} /> Signatures
                                 </button>
                             </div>
                         </div>
@@ -317,24 +469,72 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                                         </div>
                                     </div>
 
-                                    {/* Header block fields */}
+                                    {/* Header block */}
                                     {block.type === "header" && (
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div>
-                                                <label className="text-[10px] font-bold text-slate-500">Annexure No.</label>
-                                                <input
-                                                    type="text"
-                                                    value={block.annexNumber}
-                                                    onChange={(e) => updateBlock(block.id, "annexNumber", e.target.value)}
-                                                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
-                                                />
+                                        <div className="space-y-2 text-xs">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500">Annexure Label</label>
+                                                    <input
+                                                        type="text"
+                                                        value={block.annexNumber}
+                                                        onChange={(e) => updateBlock(block.id, "annexNumber", e.target.value)}
+                                                        placeholder="e.g. Annexure"
+                                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500">Subtitle / Letterhead Note</label>
+                                                    <input
+                                                        type="text"
+                                                        value={block.subtext}
+                                                        onChange={(e) => updateBlock(block.id, "subtext", e.target.value)}
+                                                        placeholder="(To be submitted on Official Letterhead)"
+                                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                                    />
+                                                </div>
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-bold text-slate-500">Heading</label>
+                                                <label className="text-[10px] font-bold text-slate-500">Heading Title</label>
                                                 <input
                                                     type="text"
                                                     value={block.heading}
                                                     onChange={(e) => updateBlock(block.id, "heading", e.target.value)}
+                                                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Recipient block */}
+                                    {block.type === "recipient" && (
+                                        <div className="space-y-2 text-xs">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500">Authority</label>
+                                                    <input
+                                                        type="text"
+                                                        value={block.authority}
+                                                        onChange={(e) => updateBlock(block.id, "authority", e.target.value)}
+                                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500">Department</label>
+                                                    <input
+                                                        type="text"
+                                                        value={block.department}
+                                                        onChange={(e) => updateBlock(block.id, "department", e.target.value)}
+                                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500">Subject Line</label>
+                                                <input
+                                                    type="text"
+                                                    value={block.subject}
+                                                    onChange={(e) => updateBlock(block.id, "subject", e.target.value)}
                                                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
                                                 />
                                             </div>
@@ -350,19 +550,100 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                                                 onChange={(e) => updateBlock(block.id, "text", e.target.value)}
                                                 className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-800 leading-relaxed outline-none focus:ring-2 focus:ring-purple-500"
                                             />
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="text-[10px] font-bold text-slate-400">Insert Variable:</span>
-                                                {VARIABLE_CHIPS.map(chip => (
+                                            <div className="space-y-1.5 pt-1">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[10px] font-bold text-slate-400">Quick Variables:</span>
+                                                    {VARIABLE_CHIPS.map(chip => (
+                                                        <button
+                                                            key={chip.token}
+                                                            type="button"
+                                                            onClick={() => insertChipIntoBlock(block.id, chip.token)}
+                                                            className="text-[10px] bg-slate-100 hover:bg-purple-100 text-purple-800 font-medium px-2 py-0.5 rounded cursor-pointer transition-colors"
+                                                        >
+                                                            {chip.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Custom Variable Creator input */}
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <span className="text-[10px] font-bold text-slate-500 shrink-0">Custom Token:</span>
+                                                    <input
+                                                        type="text"
+                                                        value={customVarInput}
+                                                        onChange={(e) => setCustomVarInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}
+                                                        placeholder="e.g. warranty_period or solvency_amount"
+                                                        className="px-2 py-1 border border-slate-300 rounded-lg text-[11px] font-mono flex-1 outline-none focus:ring-1 focus:ring-purple-500"
+                                                    />
                                                     <button
-                                                        key={chip.token}
                                                         type="button"
-                                                        onClick={() => insertChipIntoBlock(block.id, chip.token)}
-                                                        className="text-[10px] bg-slate-100 hover:bg-purple-100 text-purple-800 font-medium px-2 py-0.5 rounded cursor-pointer transition-colors"
+                                                        disabled={!customVarInput.trim()}
+                                                        onClick={() => {
+                                                            if (customVarInput.trim()) {
+                                                                insertChipIntoBlock(block.id, `{{${customVarInput.trim()}}}`);
+                                                                setCustomVarInput("");
+                                                            }
+                                                        }}
+                                                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white font-bold rounded-lg text-[10px] cursor-pointer transition-all shrink-0"
                                                     >
-                                                        {chip.label}
+                                                        + Insert {"{{" + (customVarInput.trim() || "token") + "}}"}
                                                     </button>
-                                                ))}
+                                                </div>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* Placeholder Box block */}
+                                    {block.type === "placeholder_box" && (
+                                        <div className="space-y-1.5 text-xs">
+                                            <label className="text-[10px] font-bold text-slate-500">Placeholder Box Notice Text</label>
+                                            <input
+                                                type="text"
+                                                value={block.text}
+                                                onChange={(e) => updateBlock(block.id, "text", e.target.value)}
+                                                placeholder="e.g. please add the technical specs table here"
+                                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Key Values block */}
+                                    {block.type === "key_values" && (
+                                        <div className="space-y-2 text-xs">
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500">Table Header Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={block.title}
+                                                    onChange={(e) => updateBlock(block.id, "title", e.target.value)}
+                                                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold"
+                                                />
+                                            </div>
+                                            <span className="text-[10px] font-bold text-slate-400">Items:</span>
+                                            {(block.items || []).map((item, itemIdx) => (
+                                                <div key={itemIdx} className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.label}
+                                                        onChange={(e) => {
+                                                            const newItems = [...block.items];
+                                                            newItems[itemIdx].label = e.target.value;
+                                                            updateBlock(block.id, "items", newItems);
+                                                        }}
+                                                        className="w-1/2 px-2 py-1 border border-slate-300 rounded text-xs"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={item.value}
+                                                        onChange={(e) => {
+                                                            const newItems = [...block.items];
+                                                            newItems[itemIdx].value = e.target.value;
+                                                            updateBlock(block.id, "items", newItems);
+                                                        }}
+                                                        className="w-1/2 px-2 py-1 border border-slate-300 rounded text-xs"
+                                                    />
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 
@@ -412,8 +693,8 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                             <Eye size={14} /> Live Document Preview
                         </span>
-                        <div className="w-full max-w-[480px] bg-white p-6 rounded shadow-lg border-2 border-emerald-800 text-xs text-slate-900 leading-relaxed font-serif min-h-[500px]">
-                            <div dangerouslySetInnerHTML={{ __html: compiledPreview }} />
+                        <div className="w-full max-w-[480px] bg-white p-6 rounded shadow-lg border-2 border-emerald-800 text-xs text-slate-900 leading-relaxed font-sans min-h-[500px]">
+                            <div dangerouslySetInnerHTML={{ __html: getRenderedPreviewHtml() }} />
                         </div>
                     </div>
                 </div>
@@ -432,7 +713,7 @@ const VisualAnnexureBuilder = ({ isOpen, onClose, onSave, initialData = null }) 
                         onClick={handleSave}
                         className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-600/20 transition-all cursor-pointer"
                     >
-                        <Save size={15} /> Save to Annexures Library
+                        <Save size={15} /> Save to Annexures Master
                     </button>
                 </div>
             </div>

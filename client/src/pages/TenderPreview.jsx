@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw, Paperclip, Download, FileDown, Package, FileText } from 'lucide-react';
+import { Save, Plus, Trash2, ArrowLeft, Check, RefreshCw, Paperclip, Download, FileDown, Package, FileText, Edit3 } from 'lucide-react';
 import {
     fetchTender,
     fetchDashboardData,
@@ -31,7 +31,7 @@ const PageLayout = ({ children, pageNumber, totalPages, contentRef, isFirst }) =
                         {children}
                     </div>
                     <div className="page-footer">
-                        {pageNumber}/{totalPages}
+                        Page {pageNumber} of {totalPages}
                     </div>
                 </div>
             </div>
@@ -78,8 +78,8 @@ const TenderPreview = () => {
                 const allCategories = dashboardData.categories || [];
                 const allAnnexures = await fetchAnnexures();
 
-                const selectedTermIds = tender.selectedTermIds || [];
-                const selectedTerms = allTerms.filter(term => selectedTermIds.includes(term.id));
+                const selectedTermIds = (tender.selectedTermIds || []).map(id => Number(id));
+                const selectedTerms = allTerms.filter(term => selectedTermIds.includes(Number(term.id)));
 
                 setTerms(selectedTerms);
                 setCategories(allCategories);
@@ -88,16 +88,25 @@ const TenderPreview = () => {
 
                 // If loading a saved document, use its saved pages
                 if (savedId) {
-                    const savedDoc = await fetchSavedDocument(savedId);
-                    if (savedDoc) {
-                        setCurrentSavedDoc(savedDoc);
-                        setSaveName(savedDoc.name || `Version ${savedDoc.id}`);
-                        if (savedDoc.pages) {
+                    try {
+                        const savedDoc = await fetchSavedDocument(savedId);
+                        if (savedDoc && savedDoc.pages && typeof savedDoc.pages === 'object' && Object.keys(savedDoc.pages).length > 0) {
+                            setCurrentSavedDoc(savedDoc);
+                            setSaveName(savedDoc.name || `Version ${savedDoc.id}`);
                             const loadedPages = Object.keys(savedDoc.pages)
                                 .sort((a, b) => parseInt(a) - parseInt(b))
                                 .map(key => ({ id: key, html: savedDoc.pages[key] }));
                             setPages(loadedPages);
+                        } else {
+                            const generatedPages = generatePages(tender, selectedTerms, allCategories, allAnnexures);
+                            setPages(generatedPages);
+                            setSaveName(`${tender.tenderName || "Tender"} - Draft`);
                         }
+                    } catch (docErr) {
+                        console.warn("Failed to load saved doc version, falling back to generated pages:", docErr);
+                        const generatedPages = generatePages(tender, selectedTerms, allCategories, allAnnexures);
+                        setPages(generatedPages);
+                        setSaveName(`${tender.tenderName || "Tender"} - Draft`);
                     }
                 } else {
                     // Generate fresh pages from tender data
@@ -190,21 +199,62 @@ const TenderPreview = () => {
 
             const map = {
                 tenderName: tender.tenderName || "Procurement of Goods",
+                tender_name: tender.tenderName || "Procurement of Goods",
                 tenderNo: tender.tenderNo || "1-13/2009-HPU",
+                tender_no: tender.tenderNo || "1-13/2009-HPU",
                 departmentName: tender.departmentName || "Store Purchase Office",
+                department_name: tender.departmentName || "Store Purchase Office",
                 departmentEmail: tender.departmentEmail || "spo@hpuniv.ac.in",
-                tenderInvitingAuthority: tender.tenderInvitingAuthority || "Store Purchase Officer",
+                department_email: tender.departmentEmail || "spo@hpuniv.ac.in",
+                tenderInvitingAuthority: tender.tenderInvitingAuthority || tender.variables?.tenderInvitingAuthority || "Store Purchase Officer",
+                tender_inviting_authority: tender.tenderInvitingAuthority || tender.variables?.tenderInvitingAuthority || "Store Purchase Officer",
                 estimatedCost: estCostFormatted,
+                estimated_cost: estCostFormatted,
                 estimatedCostWords: estCostWords,
+                estimated_cost_words: estCostWords,
                 emdAmount: emdFormatted,
+                emd_amount: emdFormatted,
                 emdAmountWords: emdWords,
+                emd_amount_words: emdWords,
                 pbgAmount: pbgFormatted,
+                pbg_amount: pbgFormatted,
                 pbgAmountWords: pbgWords,
-                emdPledgeOfficer: tender.emdPledgeOfficer || "Finance Officer, H.P. University, Shimla-05",
+                pbg_amount_words: pbgWords,
+                emdPledgeOfficer: tender.emdPledgeOfficer || tender.variables?.emdPledgeOfficer || "Finance Officer, H.P. University, Shimla-05",
+                emd_pledge_officer: tender.emdPledgeOfficer || tender.variables?.emdPledgeOfficer || "Finance Officer, H.P. University, Shimla-05",
                 bidValidity: tender.bidValidity || "90",
+                bid_validity: tender.bidValidity || "90",
+                bid_validity_days: tender.bidValidity ? `${tender.bidValidity} days` : "90 days",
                 deliveryDays: tender.deliveryDays || "15",
+                delivery_days: tender.deliveryDays || "15",
                 procurementLocations: tender.procurementLocations || "University Campus, Summer Hill, Shimla-171005",
+                procurement_locations: tender.procurementLocations || "University Campus, Summer Hill, Shimla-171005",
+                delivery_location: tender.variables?.delivery_location || tender.procurementLocations || "University Campus, Summer Hill, Shimla-171005",
                 courtJurisdiction: tender.courtJurisdiction || "Shimla Urban",
+                court_jurisdiction: tender.courtJurisdiction || "Shimla Urban",
+                scope_of_work: tender.variables?.scope_of_work || tender.tenderName || "Purchase of Goods/Equipment",
+                stamp_paper_value: tender.variables?.stamp_paper_value || "50",
+                contract_signing_days: tender.variables?.contract_signing_days || "15",
+                pbg_submission_days: tender.variables?.pbg_submission_days || "15",
+                pbg_validity_period: tender.variables?.pbg_validity_period || "14",
+                pbg_percentage: tender.variables?.pbg_percentage || "5",
+                penalty_rate: tender.variables?.penalty_rate || "0.5",
+                max_penalty: tender.variables?.max_penalty || "10",
+                max_delay_weeks: tender.variables?.max_delay_weeks || "10",
+                warranty_years: tender.variables?.warranty_years || (tender.warrantyDurable ? tender.warrantyDurable : "1"),
+                warranty_durable: tender.warrantyDurable || "12 months",
+                warranty_consumable: tender.warrantyConsumable || "6 months",
+                experience_years: tender.variables?.experience_years || "3",
+                financial_years: tender.variables?.financial_years || "last 3 financial years",
+                past_performance_percentage: tender.variables?.past_performance_percentage || "50",
+                min_turnover: tender.variables?.min_turnover || "Rs. 10 Lakh",
+                submission_officer: tender.variables?.submission_officer || tender.tenderInvitingAuthority || "Store Purchase Officer",
+                department_address: tender.variables?.department_address || `${tender.departmentName || "Store Purchase Office"}, H.P. University, Summer Hill, Shimla-171005`,
+                emd_submission_days: tender.variables?.emd_submission_days || "5",
+                portal_name: tender.variables?.portal_name || (isLimited ? "hpuniv.ac.in" : isETender ? "hptenders.gov.in" : "GeM Portal (gem.gov.in)"),
+                tender_fee: tender.variables?.tender_fee || tender.tenderFee || "1,000",
+                tender_fee_words: tender.variables?.tender_fee_words || "Rupees One Thousand Only",
+                arbitrator_authority: tender.variables?.arbitrator_authority || "Vice-Chancellor, H.P. University, Shimla",
                 publishDate: formatDate(tender.publishDate),
                 bidEndDate: formatDate(tender.bidEndDate),
                 techEvalDate: formatDate(tender.techEvalDate),
@@ -216,11 +266,97 @@ const TenderPreview = () => {
             const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
             Object.keys(map).forEach(key => {
-                const escaped = escapeRegExp(key);
-                const regex = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'gi');
-                result = result.replace(regex, (map[key] !== undefined && map[key] !== "") ? map[key] : `{{${key}}}`);
+                const val = map[key];
+                if (val !== undefined && val !== null && String(val).trim() !== "") {
+                    const escaped = escapeRegExp(key);
+                    const regex = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'gi');
+                    result = result.replace(regex, String(val));
+                }
             });
             return result;
+        };
+
+        // Helper function to build cleanly paginated Terms and Conditions pages
+        // Populates continuously across sections on the same page, breaking to a new page ONLY when the page is full till the bottom
+        const buildTermsPages = (termsList, catsList, startSecNum = 1, prefix = "SECTION") => {
+            if (!termsList || termsList.length === 0) return [];
+
+            // Group terms by categoryId (converting categoryId to number for reliable matching)
+            const grouped = {};
+            termsList.forEach(term => {
+                const catId = Number(term.categoryId) || 1;
+                if (!grouped[catId]) grouped[catId] = [];
+                grouped[catId].push(term);
+            });
+
+            // Sort categories by their defined order/id
+            const sortedCats = [...(catsList || [])].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+
+            const pgs = [];
+            let currentHtml = "";
+            let currentLines = 0;
+            const MAX_PAGE_LINES = 47; // Calibrated for full A4 height (~1035px inner printable area at 10.5pt font)
+
+            const flush = () => {
+                if (currentHtml.trim()) {
+                    pgs.push(currentHtml);
+                    currentHtml = "";
+                    currentLines = 0;
+                }
+            };
+
+            // Estimate lines of text for a string given average line length of ~95 chars at 10.5pt
+            const estimateLines = (text) => {
+                if (!text) return 1;
+                const cleanText = text.replace(/<[^>]*>/g, '').trim();
+                return Math.max(1, Math.ceil(cleanText.length / 95));
+            };
+
+            let secIndex = startSecNum;
+
+            sortedCats.forEach((cat) => {
+                const catTerms = grouped[Number(cat.id)];
+                if (!catTerms || catTerms.length === 0) return;
+
+                const headerText = `${prefix} ${secIndex}: ${cat.name.toUpperCase()}`;
+                const headerLines = 1.8; // Header text + margin + border-bottom
+
+                // If adding header at the bottom with < 2 lines left, push header to next page
+                if (currentLines > 0 && currentLines + headerLines + 2 > MAX_PAGE_LINES) {
+                    flush();
+                }
+
+                const headerHtml = `<h4 style="font-size: 13px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; margin-top: ${currentLines > 0 ? '14px' : '0px'}; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; color: #0f172a; letter-spacing: 0.3px;">${headerText}</h4>`;
+                
+                currentHtml += headerHtml;
+                currentLines += headerLines;
+
+                catTerms.forEach((term, termIndex) => {
+                    const desc = replaceVars(term.description);
+                    const titleText = `${secIndex}.${termIndex + 1} ${term.title}:`;
+                    const fullClauseText = `${titleText} ${desc}`;
+                    const termLines = estimateLines(fullClauseText) + 0.3; // Text lines + compact margin-bottom
+
+                    // If adding this term would overflow the current page, start a new page seamlessly
+                    if (currentLines + termLines > MAX_PAGE_LINES) {
+                        flush();
+                    }
+
+                    const termHtml = `
+                        <div style="margin-bottom: 8px; padding-left: 2px; text-align: justify; line-height: 1.45; font-size: 10.5pt; color: #000;">
+                            <p style="margin-bottom: 2px;"><strong>${titleText}</strong> <span style="font-weight: normal;">${desc}</span></p>
+                        </div>
+                    `;
+
+                    currentHtml += termHtml;
+                    currentLines += termLines;
+                });
+
+                secIndex++;
+            });
+
+            flush();
+            return pgs;
         };
 
         const generatedPages = [];
@@ -279,7 +415,7 @@ const TenderPreview = () => {
                     <p style="margin-bottom: 8px;"><strong>2. Submission Deadline:</strong> Quotations must reach this office on or before <strong>${formatDate(tender.bidEndDate)} till ${tender.bidEndTime || "5:00 P.M."}</strong>.</p>
                     <p style="margin-bottom: 14px;"><strong>3. Bid Opening:</strong> The technical bids will be opened on <strong>${formatDate(tender.techEvalDate)} at ${tender.techEvalTime || "11:30 A.M."}</strong> in the <strong>${tender.openingVenue || "Store Purchase Office"}</strong> and will be evaluated by the committee concerned.</p>
                     
-                    <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; margin-top: 14px; text-decoration: underline;">Additional Terms and Conditions</h3>
+                    <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; margin-top: 14px; text-decoration: underline;">General Bid Conditions</h3>
                     <p style="margin-bottom: 8px;"><strong>4. Rate Specification:</strong> All rates must be inclusive of applicable taxes (GST), duties, levies, and quoted F.O.R. destination (${tender.procurementLocations || "Hostel Premises / University Campus"}).</p>
                     <p style="margin-bottom: 8px;"><strong>5. Bid Security (EMD):</strong> Bids submitted without the required EMD will be rejected.</p>
                     <p style="margin-bottom: 8px;"><strong>6. Performance Bank Guarantee (PBG):</strong> The successful bidder must submit a Performance Bank Guarantee of ₹ ${pbgFormatted}/- (${pbgWords}) 15 days prior to the issuance of the award letter.</p>
@@ -298,8 +434,16 @@ const TenderPreview = () => {
                 </div>
             `;
 
-            generatedPages.push({ id: '1', html: page1 });
-            generatedPages.push({ id: '2', html: page2 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page1 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page2 });
+
+            // Generate Terms pages for Limited Tender if terms are selected
+            if (selectedTerms && selectedTerms.length > 0) {
+                const termsPages = buildTermsPages(selectedTerms, allCategories, 1, "SECTION");
+                termsPages.forEach(p => {
+                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: p });
+                });
+            }
         }
 
         // -------------------------------------------------------------
@@ -365,35 +509,15 @@ const TenderPreview = () => {
                 </div>
             `;
 
-            generatedPages.push({ id: '1', html: page1 });
-            generatedPages.push({ id: '2', html: page2 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page1 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page2 });
 
-            // Generate Terms pages
-            const grouped = {};
-            selectedTerms.forEach(term => {
-                if (!grouped[term.categoryId]) grouped[term.categoryId] = [];
-                grouped[term.categoryId].push(term);
-            });
-
-            let termsHtml = '';
-            allCategories.forEach((cat, catIndex) => {
-                const catTerms = grouped[cat.id];
-                if (!catTerms || catTerms.length === 0) return;
-
-                termsHtml += `<h4 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; margin-top: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">SECTION ${catIndex + 2}: ${cat.name.toUpperCase()}</h4>`;
-
-                catTerms.forEach((term, termIndex) => {
-                    const description = replaceVars(term.description);
-                    termsHtml += `
-                        <div style="margin-bottom: 10px; padding-left: 4px; text-align: justify; line-height: 1.5; font-size: 10.5pt;">
-                            <p><strong>${catIndex + 2}.${termIndex + 1} ${term.title}:</strong> <span style="font-weight: normal;">${description}</span></p>
-                        </div>
-                    `;
+            // Generate Terms pages for GeM ATC
+            if (selectedTerms && selectedTerms.length > 0) {
+                const termsPages = buildTermsPages(selectedTerms, allCategories, 2, "SECTION");
+                termsPages.forEach(p => {
+                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: p });
                 });
-            });
-
-            if (termsHtml.trim()) {
-                generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
             }
         }
 
@@ -455,47 +579,156 @@ const TenderPreview = () => {
                 </div>
             `;
 
-            generatedPages.push({ id: '1', html: page1 });
-            generatedPages.push({ id: '2', html: page2 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page1 });
+            generatedPages.push({ id: `${generatedPages.length + 1}`, html: page2 });
 
-            // Generate Terms pages for e-tender
-            const grouped = {};
-            selectedTerms.forEach(term => {
-                if (!grouped[term.categoryId]) grouped[term.categoryId] = [];
-                grouped[term.categoryId].push(term);
-            });
-
-            let termsHtml = '';
-            allCategories.forEach((cat, catIndex) => {
-                const catTerms = grouped[cat.id];
-                if (!catTerms || catTerms.length === 0) return;
-
-                termsHtml += `<h4 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; margin-top: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">SECTION ${catIndex + 2}: ${cat.name.toUpperCase()}</h4>`;
-
-                catTerms.forEach((term, termIndex) => {
-                    const description = replaceVars(term.description);
-                    termsHtml += `
-                        <div style="margin-bottom: 10px; padding-left: 4px; text-align: justify; line-height: 1.5; font-size: 10.5pt;">
-                            <p><strong>${catIndex + 2}.${termIndex + 1} ${term.title}:</strong> <span style="font-weight: normal;">${description}</span></p>
-                        </div>
-                    `;
+            // Generate Terms pages for e-Tender
+            if (selectedTerms && selectedTerms.length > 0) {
+                const termsPages = buildTermsPages(selectedTerms, allCategories, 2, "SECTION");
+                termsPages.forEach(p => {
+                    generatedPages.push({ id: `${generatedPages.length + 1}`, html: p });
                 });
-            });
-
-            if (termsHtml.trim()) {
-                generatedPages.push({ id: `${generatedPages.length + 1}`, html: `<div>${termsHtml}</div>` });
             }
         }
 
         // -------------------------------------------------------------
-        // DYNAMIC ANNEXURES RENDERING (APPLIES TO ALL SELECTED ANNEXURES)
+        // DYNAMIC ANNEXURES RENDERING (MANDATORY ANNEXURE-I COMPLIANCE SHEET + SEQUENTIAL ANNEXURES)
         // -------------------------------------------------------------
         if (tender.isAnnexureRequired !== false) {
-            const selectedAnnexIds = tender.selectedAnnexureIds || [];
-            const selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.includes(a.id));
+            const ROMAN_NUMS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"];
+            const toRoman = (num) => ROMAN_NUMS[num - 1] || `${num}`;
 
-            selectedAnnexList.forEach((annex) => {
+            const selectedAnnexIds = (tender.selectedAnnexureIds || []).map(aId => Number(aId));
+            let selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.includes(Number(a.id)));
+
+            // Separate compliance sheet templates if already in list to avoid duplication
+            const otherAnnexures = selectedAnnexList.filter(a =>
+                !a.title.toLowerCase().includes("compliance sheet") &&
+                a.code !== "ANNEX_COMPLIANCE_FACT" &&
+                a.code !== "ANNEX_TECH_COMPLIANCE" // Annexure-X Tech Specs is kept as a separate annexure, only eligibility fact sheet is merged
+            );
+
+            // 1. Gather all Document Proof items from selected terms
+            const docProofItems = [];
+            const addedProofs = new Set();
+
+            (selectedTerms || []).forEach(term => {
+                if (term.isDocumentRequired && term.documentProofName && !addedProofs.has(term.documentProofName.toLowerCase())) {
+                    docProofItems.push(term.documentProofName);
+                    addedProofs.add(term.documentProofName.toLowerCase());
+                } else {
+                    const tLow = (term.title || "").toLowerCase();
+                    if ((tLow.includes("pan") || tLow.includes("gst")) && !addedProofs.has("pan_gst")) {
+                        docProofItems.push("Valid PAN Card & GST Registration Certificate");
+                        addedProofs.add("pan_gst");
+                    } else if ((tLow.includes("turnover") || tLow.includes("annual turnover")) && !addedProofs.has("turnover")) {
+                        docProofItems.push("Audited Balance Sheets / CA Turnover Certificate with UDIN (Last 3 Years)");
+                        addedProofs.add("turnover");
+                    } else if ((tLow.includes("experience") || tLow.includes("past performance")) && !addedProofs.has("experience")) {
+                        docProofItems.push("Copies of Purchase Orders & Satisfactory Performance Certificates");
+                        addedProofs.add("experience");
+                    } else if ((tLow.includes("income tax") || tLow.includes("itr")) && !addedProofs.has("itr")) {
+                        docProofItems.push("Income Tax Returns (ITR) for Last 3 Financial Years");
+                        addedProofs.add("itr");
+                    } else if ((tLow.includes("earnest money") || tLow.includes("emd")) && !addedProofs.has("emd")) {
+                        docProofItems.push("Original EMD Instrument / Valid MSE Exemption Certificate");
+                        addedProofs.add("emd");
+                    }
+                }
+            });
+
+            // If no terms provided document proofs, supply standard baseline requirements
+            if (docProofItems.length === 0) {
+                docProofItems.push("Tender Fee & EMD Deposit Receipt / MSE Exemption Certificate");
+                docProofItems.push("Certificate of Incorporation / Registration of Firm");
+                docProofItems.push("Valid PAN Card & GSTIN Registration Certificate");
+                docProofItems.push("Audited Balance Sheets / CA Turnover Certificate (Last 3 Years)");
+                docProofItems.push("Copies of Purchase Orders & Satisfactory Installation / Performance Reports");
+            }
+
+            // 2. Build Compliance Sheet Table Rows (Document Proofs + Sequentially Numbered Annexures)
+            let complianceRowIdx = 1;
+            let complianceRowsHtml = "";
+
+            // First: Document proofs
+            docProofItems.forEach(proof => {
+                complianceRowsHtml += `
+                    <tr>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;">${complianceRowIdx++}.</td>
+                        <td style="border: 1px solid black; padding: 6px 8px;">${proof}</td>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;"></td>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;"></td>
+                    </tr>
+                `;
+            });
+
+            // Second: Dynamic Annexure Rows (Numbered Annexure-II, Annexure-III, etc.)
+            otherAnnexures.forEach((annex, idx) => {
+                const assignedRoman = toRoman(idx + 2);
+                const cleanTitle = annex.title.replace(/^Annexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+\s*[:–-]?\s*/i, "").trim();
+                complianceRowsHtml += `
+                    <tr>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;">${complianceRowIdx++}.</td>
+                        <td style="border: 1px solid black; padding: 6px 8px; font-weight: 600;">${cleanTitle} – <span style="text-decoration: underline;">Annexure-${assignedRoman}</span></td>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;"></td>
+                        <td style="border: 1px solid black; padding: 6px 8px; text-align: center;"></td>
+                    </tr>
+                `;
+            });
+
+            // 3. Assemble Mandatory Annexure-I (Compliance Sheet) HTML
+            const annexureIPageHtml = `
+                <div style="font-size: 10.5pt; line-height: 1.5; color: #000; text-align: justify;">
+                    <div style="text-align: center; margin-bottom: 14px;">
+                        <h2 style="font-size: 17px; font-weight: bold; text-decoration: underline; margin-bottom: 3px;">Annexure-I</h2>
+                        <h3 style="font-size: 15px; font-weight: bold; text-transform: uppercase;">COMPLIANCE SHEET OF ELIGIBILITY CRITERIA & MANDATORY SUBMISSIONS</h3>
+                        <p style="font-size: 9.5pt; color: #475569; margin-top: 3px;">(To be submitted on Bidder's Official Letterhead duly signed and stamped)</p>
+                    </div>
+                    <p style="margin-bottom: 12px; font-size: 10pt;"><strong>Tender Title:</strong> ${tender.tenderName || "Equipment / Supplies"} | <strong>Tender No:</strong> ${tender.tenderNo || "1-5/2025/HPU"}</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9.5pt;">
+                        <thead>
+                            <tr>
+                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 7%; text-align: center;">Sr. No.</th>
+                                <th style="border: 1px solid black; padding: 6px 8px; background: #f0f0f0; width: 53%; text-align: left;">Particulars / Required Document Proof & Annexure Reference</th>
+                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 20%; text-align: center;">Complied (Yes/No)</th>
+                                <th style="border: 1px solid black; padding: 6px 6px; background: #f0f0f0; width: 20%; text-align: center;">Page No. in Bid</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${complianceRowsHtml}
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 14px; font-size: 9.5pt; line-height: 1.5; text-align: justify;">
+                        <p style="font-weight: bold; text-decoration: underline; margin-bottom: 4px;">DECLARATION & UNDERTAKING</p>
+                        <p style="margin-bottom: 6px;">I / We hereby declare that the information and documentary evidences furnished above are true, authentic, and complete. In case any information or certificate submitted is found to be incorrect, forged, or misleading at any stage, our bid shall stand summarily rejected, or if contract has been awarded, the same shall stand terminated with forfeiture of EMD / Performance Bank Guarantee.</p>
+                        <p>That our firm has carefully read and understood the entire tender document and unconditionally agrees to all the terms, conditions, and specifications specified therein.</p>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 24px; font-size: 9.5pt;">
+                        <div>
+                            <p><strong>Date:</strong> _ _ / _ _ / 2026<br/><strong>Place:</strong> ______________</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="margin-bottom: 20px;"><strong>Authorized Signatory:</strong> ___________________________</p>
+                            <p><strong>Name & Designation:</strong> _________________________<br/><strong>Official Seal:</strong> _________________________</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add Annexure-I
+            generatedPages.push({
+                id: `${generatedPages.length + 1}`,
+                html: `<div>${annexureIPageHtml}</div>`,
+            });
+
+            // 4. Render all remaining selected Annexures with sequential Roman numerals (Annexure-II, Annexure-III, ...)
+            otherAnnexures.forEach((annex, idx) => {
+                const assignedRoman = toRoman(idx + 2);
                 let renderedTemplate = annex.contentTemplate || `<p>${annex.title}</p>`;
+
+                // Dynamically replace Annexure header Roman numerals in template
+                renderedTemplate = renderedTemplate.replace(/(<h[1-3][^>]*>)\s*Annexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+/gi, `$1Annexure-${assignedRoman}`);
+                renderedTemplate = renderedTemplate.replace(/\bAnnexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+\b/i, `Annexure-${assignedRoman}`);
                 renderedTemplate = replaceVars(renderedTemplate);
 
                 generatedPages.push({
@@ -557,7 +790,10 @@ const TenderPreview = () => {
             });
             setIsSavingDirect(false);
             setSaveStatus('saved');
-            setTimeout(() => setSaveStatus(null), 2000);
+            setTimeout(() => {
+                setSaveStatus(null);
+                navigate('/my-tenders');
+            }, 800);
         } catch (err) {
             console.error("Save error:", err);
             setIsSavingDirect(false);
@@ -579,19 +815,18 @@ const TenderPreview = () => {
         const currentPages = getCurrentPageContents();
 
         try {
-            const newDoc = await saveDocument({
+            await saveDocument({
                 tenderId: parseInt(id),
-                name: saveName,
+                name: saveName.trim(),
                 pages: currentPages,
                 extraPages: [],
             });
             setSaveStatus('saved');
-            setCurrentSavedDoc(newDoc);
-            setSearchParams({ savedId: newDoc.id });
             setTimeout(() => {
                 setIsSaveModalOpen(false);
                 setSaveStatus(null);
-            }, 1200);
+                navigate('/my-tenders');
+            }, 800);
         } catch (err) {
             console.error("Error saving:", err);
             setSaveStatus('error');
@@ -609,7 +844,10 @@ const TenderPreview = () => {
     if (error) return <div className="p-8 text-center text-red-600 font-medium">{error}</div>;
     if (!data) return <div className="p-8 text-center">No data found.</div>;
 
-    const totalPages = pages.length;
+    const effectivePages = (pages && pages.length > 0)
+        ? pages
+        : generatePages(data, terms, categories, annexures);
+    const totalPages = effectivePages.length;
 
     return (
         <div className="min-h-screen bg-slate-100 p-8 flex flex-col items-center gap-8 doc-font">
@@ -638,9 +876,17 @@ const TenderPreview = () => {
                 <button
                     onClick={() => navigate("/")}
                     className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer"
-                    title="Back to Dashboard"
+                    title="Back to My Tenders"
                 >
-                    <ArrowLeft size={16} /> Back
+                    <ArrowLeft size={16} /> My Tenders
+                </button>
+
+                <button
+                    onClick={() => navigate(`/edit-tender/${id}`)}
+                    className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 px-3.5 py-2 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    title="Edit Tender Form (Dates, Articles, Terms & Conditions, Annexures)"
+                >
+                    <Edit3 size={15} className="text-blue-600" /> Edit Form
                 </button>
 
                 <div className="h-6 w-px bg-slate-200 mx-1"></div>
@@ -766,10 +1012,10 @@ const TenderPreview = () => {
             )}
 
             {/* Document Pages (Directly editable A4 pages with page number 22/33) */}
-            {pages.map((page, index) => (
-                <div key={page.id} className="page-wrapper relative">
+            {effectivePages.map((page, index) => (
+                <div key={page.id || `page-${index}`} className="page-wrapper relative">
                     {/* Delete page button (visible on hover) */}
-                    {pages.length > 1 && (
+                    {effectivePages.length > 1 && (
                         <div className="page-controls">
                             <button
                                 onClick={() => removePage(index)}

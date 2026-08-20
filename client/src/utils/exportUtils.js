@@ -245,10 +245,16 @@ export const downloadDocumentAsDocx = async (docOrId, tenderOrName) => {
             ? (docOrId.name || tenderOrName?.tenderName) 
             : (typeof tenderOrName === "string" ? tenderOrName : tenderOrName?.tenderName);
         
-        const filename = `${sanitizeFilename(rawName || "Tender_Document")}.docx`;
+        let filename = (rawName || "Tender_Document")
+            .replace(/[/\\?%*:|"<>]/g, "-")
+            .replace(/\s+/g, "_")
+            .trim();
+        if (!filename.toLowerCase().endsWith(".docx")) {
+            filename += ".docx";
+        }
 
         if (docId) {
-            const token = localStorage.getItem("hpu_token");
+            const token = localStorage.getItem("tender_auth_token") || localStorage.getItem("hpu_token");
             const headers = token ? { Authorization: `Bearer ${token}` } : {};
             
             const res = await fetch(`${API_URL}/documents/${docId}/docx`, { headers });
@@ -258,7 +264,26 @@ export const downloadDocumentAsDocx = async (docOrId, tenderOrName) => {
             }
 
             const blob = await res.blob();
-            saveAs(blob, filename);
+            
+            // Create Blob with exact Word DOCX MIME type
+            const docxBlob = new Blob([blob], {
+                type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            });
+
+            // Use direct anchor download trigger to guarantee exact filename and .docx extension
+            const blobUrl = window.URL.createObjectURL(docxBlob);
+            const link = document.createElement("a");
+            link.style.display = "none";
+            link.href = blobUrl;
+            link.setAttribute("download", filename);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+            }, 500);
             return;
         }
 

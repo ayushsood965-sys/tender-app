@@ -148,7 +148,11 @@ router.post("/recommend", async (req, res) => {
         allAnnexures = await Annexure.find().sort({ id: 1 });
 
         const apiKey = process.env.OPENROUTER_API_KEY;
-        const model = process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-lightning:free";
+        const modelsConfig = process.env.OPENROUTER_MODELS || process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-lightning:free,nvidia/nemotron-3-ultra:free";
+        const candidateModels = modelsConfig.split(",").map(m => m.trim()).filter(Boolean);
+        if (candidateModels.length === 0) {
+            candidateModels.push("nvidia/nemotron-3.5-lightning:free", "nvidia/nemotron-3-ultra:free");
+        }
 
         const termsSummary = (allTerms || []).slice(0, 40).map(t => `ID ${t.id}: ${t.title} (Cat: ${t.categoryName || t.categoryId})`).join("\n");
         const annexuresSummary = (allAnnexures || []).map(a => `ID ${a.id}: ${a.title} (${a.category})`).join("\n");
@@ -168,77 +172,83 @@ Select appropriate Terms and Annexures. Output raw JSON ONLY:
 }`;
 
         const result = await enqueueAiTask(async () => {
-            try {
-                console.log(`🤖 [OpenRouter AI] Querying ${model} for: "${tenderName}"...`);
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    signal: AbortSignal.timeout(60000),
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://tender-app.hpuniv.ac.in",
-                        "X-Title": "University Tender App"
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [
-                            { role: "system", content: "You are a JSON API for Himachal Pradesh University. Output valid JSON only." },
-                            { role: "user", content: prompt }
-                        ],
-                        temperature: 0.1,
-                        max_tokens: 3000,
-                    })
-                });
+            for (let i = 0; i < candidateModels.length; i++) {
+                const model = candidateModels[i];
+                try {
+                    console.log(`🤖 [OpenRouter AI] Trying candidate model (${i + 1}/${candidateModels.length}): "${model}" for: "${tenderName}"...`);
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        signal: AbortSignal.timeout(35000),
+                        headers: {
+                            "Authorization": `Bearer ${apiKey}`,
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://tender-app.hpuniv.ac.in",
+                            "X-Title": "University Tender App"
+                        },
+                        body: JSON.stringify({
+                            model: model,
+                            messages: [
+                                { role: "system", content: "You are a JSON API for Himachal Pradesh University. Output valid JSON only." },
+                                { role: "user", content: prompt }
+                            ],
+                            temperature: 0.1,
+                            max_tokens: 3000,
+                        })
+                    });
 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    console.warn(`OpenRouter API error (${response.status}):`, errText);
-                    return localSmartRecommend({ tenderName, documentType, tenderCategory, estimatedCost, allTerms, allAnnexures });
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        console.warn(`⚠️ [OpenRouter AI] Model ${model} returned error status (${response.status}):`, errText.substring(0, 100));
+                        continue;
+                    }
+
+                    const aiData = await response.json();
+                    const rawContent = aiData.choices?.[0]?.message?.content;
+                    const parsed = extractJsonFromText(rawContent);
+
+                    if (!parsed) {
+                        console.warn(`⚠️ [OpenRouter AI] Could not parse JSON from ${model} output:`, rawContent?.substring(0, 100));
+                        continue;
+                    }
+
+                    // Sanitize IDs
+                    const validTermIds = new Set(allTerms.map(t => t.id));
+                    const validAnnexIds = new Set(allAnnexures.map(a => a.id));
+
+                    let recTermIds = (parsed.recommendedTermIds || parsed.recommended_term_ids || []).filter(id => validTermIds.has(Number(id)));
+                    let recAnnexIds = (parsed.recommendedAnnexureIds || parsed.recommended_annexure_ids || []).filter(id => validAnnexIds.has(Number(id)));
+
+                    // Always enforce core mandatory terms
+                    allTerms.filter(t => t.mandatory).forEach(t => {
+                        if (!recTermIds.includes(t.id)) recTermIds.push(t.id);
+                    });
+
+                    // Ensure linked annexures
+                    allTerms.filter(t => recTermIds.includes(t.id) && t.hasAnnexure && t.annexureId).forEach(t => {
+                        if (!recAnnexIds.includes(t.annexureId)) recAnnexIds.push(t.annexureId);
+                    });
+
+                    if (documentType === "Limited Tender Document" && !recAnnexIds.includes(1)) {
+                        recAnnexIds.push(1);
+                    }
+
+                    console.log(`✅ [OpenRouter AI Success: ${model}] ${recTermIds.length} terms & ${recAnnexIds.length} annexures recommended.`);
+
+                    return {
+                        recommendedTermIds: recTermIds,
+                        recommendedAnnexureIds: recAnnexIds,
+                        rationale: parsed.rationale || "AI analyzed the scope of work and mapped standard university compliance clauses.",
+                        confidence: parsed.confidence || "High",
+                        source: `OpenRouter AI (${model})`
+                    };
+                } catch (modelErr) {
+                    console.warn(`⚠️ [OpenRouter AI] Candidate model ${model} failed:`, modelErr.message);
+                    // continue to next model in list
                 }
-
-                const aiData = await response.json();
-                const rawContent = aiData.choices?.[0]?.message?.content;
-                const parsed = extractJsonFromText(rawContent);
-
-                if (!parsed) {
-                    console.warn(`Could not parse JSON from Nemotron output:`, rawContent?.substring(0, 150));
-                    return localSmartRecommend({ tenderName, documentType, tenderCategory, estimatedCost, allTerms, allAnnexures });
-                }
-
-                // Sanitize IDs
-                const validTermIds = new Set(allTerms.map(t => t.id));
-                const validAnnexIds = new Set(allAnnexures.map(a => a.id));
-
-                let recTermIds = (parsed.recommendedTermIds || parsed.recommended_term_ids || []).filter(id => validTermIds.has(Number(id)));
-                let recAnnexIds = (parsed.recommendedAnnexureIds || parsed.recommended_annexure_ids || []).filter(id => validAnnexIds.has(Number(id)));
-
-                // Always enforce core mandatory terms
-                allTerms.filter(t => t.mandatory).forEach(t => {
-                    if (!recTermIds.includes(t.id)) recTermIds.push(t.id);
-                });
-
-                // Ensure linked annexures
-                allTerms.filter(t => recTermIds.includes(t.id) && t.hasAnnexure && t.annexureId).forEach(t => {
-                    if (!recAnnexIds.includes(t.annexureId)) recAnnexIds.push(t.annexureId);
-                });
-
-                if (documentType === "Limited Tender Document" && !recAnnexIds.includes(1)) {
-                    recAnnexIds.push(1);
-                }
-
-                console.log(`✅ [OpenRouter AI Success: ${model}] ${recTermIds.length} terms & ${recAnnexIds.length} annexures recommended.`);
-
-                return {
-                    recommendedTermIds: recTermIds,
-                    recommendedAnnexureIds: recAnnexIds,
-                    rationale: parsed.rationale || "AI analyzed the scope of work and mapped standard university compliance clauses.",
-                    confidence: parsed.confidence || "High",
-                    source: `OpenRouter AI (${model})`
-                };
-            } catch (apiErr) {
-                console.warn(`OpenRouter request error:`, apiErr.message);
-                return localSmartRecommend({ tenderName, documentType, tenderCategory, estimatedCost, allTerms, allAnnexures });
             }
+
+            console.warn(`🛡️ [AI Failsafe Activated] All free AI models failed or timed out. Switching to Local Intelligent Rule Engine.`);
+            return localSmartRecommend({ tenderName, documentType, tenderCategory, estimatedCost, allTerms, allAnnexures });
         });
 
         return res.json(result);

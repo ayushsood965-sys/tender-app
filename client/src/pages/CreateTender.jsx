@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
     Building,
     Mail,
@@ -28,19 +28,62 @@ import {
     CheckCircle2,
     Search,
     Sliders,
+    Edit3,
 } from "lucide-react";
 import {
     fetchDashboardData,
     fetchAnnexures,
     createTender,
+    updateTender,
+    fetchTender,
     fetchAIRecommendation,
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { numberToIndianWords } from "../utils/numberToWords";
+import SearchableSelect from "../components/SearchableSelect";
+
+const HPU_DEPARTMENTS = [
+    { value: "Store Purchase Office", label: "Store Purchase Office", badge: "Central Purchase" },
+    { value: "Department of Physics", label: "Department of Physics", badge: "Sciences" },
+    { value: "Department of Chemistry", label: "Department of Chemistry", badge: "Sciences" },
+    { value: "CDOE (Centre for Distance & Online Education)", label: "CDOE (Distance Education)", badge: "CDOE" },
+    { value: "Chief Warden Office (Boys & Girls Hostels)", label: "Chief Warden Office", badge: "Hostels" },
+    { value: "Department of Bio-Sciences", label: "Department of Bio-Sciences", badge: "Sciences" },
+    { value: "Department of Computer Science", label: "Department of Computer Science", badge: "Sciences" },
+    { value: "University Institute of Technology (UIT)", label: "UIT (Engineering)", badge: "Engineering" },
+    { value: "Executive Engineer Division", label: "Executive Engineer Division", badge: "Estate" },
+    { value: "General Administration Branch", label: "General Administration Branch", badge: "Admin" },
+    { value: "Finance & Accounts Division", label: "Finance & Accounts Division", badge: "Finance" },
+    { value: "Controller of Examinations", label: "Controller of Examinations", badge: "Exams" },
+];
+
+const HPU_AUTHORITIES = [
+    { value: "Store Purchase Officer", label: "Store Purchase Officer", badge: "Central Purchase" },
+    { value: "Director, CDOE", label: "Director, CDOE", badge: "CDOE" },
+    { value: "Chairman, Department of Physics", label: "Chairman, Department of Physics", badge: "Academic Head" },
+    { value: "Chief Warden", label: "Chief Warden", badge: "Hostel Admin" },
+    { value: "Executive Engineer", label: "Executive Engineer", badge: "Civil/Electrical" },
+    { value: "Registrar, H.P. University", label: "Registrar, H.P. University", badge: "Administration" },
+    { value: "Finance Officer", label: "Finance Officer", badge: "Accounts" },
+    { value: "Director, UIT", label: "Director, UIT", badge: "Engineering" },
+];
+
+const HPU_VENUES = [
+    { value: "Store Purchase Office", label: "Store Purchase Office", badge: "Main" },
+    { value: "Committee Room, Vice-Chancellor Office", label: "VC Office Committee Room", badge: "Executive" },
+    { value: "Department Seminar Hall", label: "Department Seminar Hall", badge: "Department" },
+    { value: "Dean of Studies Office", label: "Dean of Studies Office", badge: "Academic" },
+    { value: "CDOE Conference Hall", label: "CDOE Conference Hall", badge: "CDOE" },
+];
 
 const CreateTender = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { id: paramId } = useParams();
+    const queryEditId = searchParams.get("editId") || searchParams.get("id");
+    const editId = paramId || queryEditId;
+    const isEditMode = Boolean(editId);
+
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
@@ -159,11 +202,92 @@ const CreateTender = () => {
     });
 
     useEffect(() => {
-        loadData();
-    }, []);
+        const initData = async () => {
+            setLoading(true);
+            try {
+                const data = await fetchDashboardData();
+                setCategories(data.categories || []);
+                setTerms(data.terms || []);
+                const annexData = await fetchAnnexures();
+                setAnnexures(annexData || []);
+
+                if (editId) {
+                    const existing = await fetchTender(editId);
+                    if (existing) {
+                        const toDateInput = (d) => {
+                            if (!d) return "";
+                            try {
+                                const parsed = new Date(d);
+                                return isNaN(parsed.getTime()) ? "" : parsed.toISOString().split("T")[0];
+                            } catch (e) {
+                                return "";
+                            }
+                        };
+
+                        setFormData({
+                            id: existing.id,
+                            documentType: existing.documentType || "Limited Tender Document",
+                            tenderCategory: existing.tenderCategory || "goods",
+                            tenderType: existing.tenderType || "limited",
+                            departmentName: existing.departmentName || "",
+                            departmentEmail: existing.departmentEmail || "",
+                            tenderInvitingAuthority: existing.tenderInvitingAuthority || "",
+                            tenderName: existing.tenderName || "",
+                            tenderNo: existing.tenderNo || "",
+                            procurementLocations: existing.procurementLocations || "",
+                            itemQuantity: existing.itemQuantity || "1 Unit",
+                            estimatedCost: existing.estimatedCost !== undefined ? String(existing.estimatedCost) : "",
+                            estimatedCostWords: existing.estimatedCostWords || "",
+                            bidValidity: existing.bidValidity !== undefined ? String(existing.bidValidity) : "90",
+                            tenderFee: existing.tenderFee !== undefined ? String(existing.tenderFee) : "1000",
+                            emdRequired: existing.emdRequired || "",
+                            emdAmount: existing.emdAmount !== undefined ? String(existing.emdAmount) : "",
+                            emdAmountWords: existing.emdAmountWords || "",
+                            pbgRequired: existing.pbgRequired || "",
+                            pbgAmount: existing.pbgAmount !== undefined ? String(existing.pbgAmount) : "",
+                            pbgAmountWords: existing.pbgAmountWords || "",
+                            emdPledgeOfficer: existing.emdPledgeOfficer || "Finance Officer, H.P. University, Shimla-05",
+                            publishDate: toDateInput(existing.publishDate) || formattedToday,
+                            isPreBidRequired: existing.isPreBidRequired || "no",
+                            preBidDate: toDateInput(existing.preBidDate) || "",
+                            bidStartDate: toDateInput(existing.bidStartDate) || formattedToday,
+                            bidEndDate: toDateInput(existing.bidEndDate) || defaultEndDate,
+                            bidEndTime: existing.bidEndTime || "5:00 P.M.",
+                            offlineSubmissionDate: toDateInput(existing.offlineSubmissionDate) || defaultEndDate,
+                            techEvalDate: toDateInput(existing.techEvalDate) || defaultTechEvalDate,
+                            techEvalTime: existing.techEvalTime || "11:30 A.M.",
+                            openingVenue: existing.openingVenue || "Store Purchase Office",
+                            deliveryDays: existing.deliveryDays !== undefined ? String(existing.deliveryDays) : "15",
+                            warrantyDurable: existing.warrantyDurable || "12 months",
+                            warrantyConsumable: existing.warrantyConsumable || "6 months",
+                            courtJurisdiction: existing.courtJurisdiction || "Courts in Shimla Urban",
+                            selectedTermIds: (existing.selectedTermIds || []).map(id => Number(id)),
+                            isAnnexureRequired: existing.isAnnexureRequired !== false,
+                            selectedAnnexureIds: (existing.selectedAnnexureIds || []).map(id => Number(id)),
+                            itemsList: (existing.itemsList && existing.itemsList.length > 0)
+                                ? existing.itemsList.map((it, idx) => ({
+                                    srNo: it.srNo || idx + 1,
+                                    name: it.name || "",
+                                    specs: it.specs || "",
+                                    quantity: it.quantity || "1",
+                                }))
+                                : [{ srNo: 1, name: "", specs: "", quantity: "1" }],
+                            variables: existing.variables || {},
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load initial data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        initData();
+    }, [editId]);
 
     useEffect(() => {
-        if (user) {
+        if (user && !isEditMode) {
             setFormData((prev) => ({
                 ...prev,
                 departmentName: user.departmentName || prev.departmentName,
@@ -171,22 +295,7 @@ const CreateTender = () => {
                 tenderInvitingAuthority: user.designation ? `${user.designation}` : prev.tenderInvitingAuthority,
             }));
         }
-    }, [user]);
-
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const data = await fetchDashboardData();
-            setCategories(data.categories || []);
-            setTerms(data.terms || []);
-            const annexData = await fetchAnnexures();
-            setAnnexures(annexData || []);
-        } catch (error) {
-            console.error("Failed to load data", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [user, isEditMode]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -325,31 +434,67 @@ const CreateTender = () => {
         .filter((t) => formData.selectedTermIds.includes(t.id) && t.hasAnnexure && t.annexureId)
         .map((t) => t.annexureId);
 
-    // Detect custom dynamic variables / placeholders in selected terms
+    // Detect custom dynamic variables / placeholders in selected terms AND selected annexures
     const getDetectedPlaceholders = () => {
         const selectedTermsList = terms.filter((t) => (formData.selectedTermIds || []).includes(t.id));
-        const placeholderMap = new Map(); // placeholderKey -> array of term titles using it
+        const selectedAnnexList = (formData.isAnnexureRequired !== false)
+            ? annexures.filter((a) => (formData.selectedAnnexureIds || []).includes(a.id))
+            : [];
 
+        const placeholderMap = new Map(); // placeholderKey -> { usedInTerms: [], usedInAnnexures: [] }
+
+        const standardKeys = [
+            "tenderName", "tenderNo", "departmentName", "departmentEmail",
+            "tenderInvitingAuthority", "estimatedCost", "estimatedCostWords",
+            "emdAmount", "emdAmountWords", "pbgAmount", "pbgAmountWords",
+            "emdPledgeOfficer", "bidValidity", "deliveryDays", "procurementLocations",
+            "courtJurisdiction", "publishDate", "bidStartDate", "bidEndDate", "bidEndTime",
+            "preBidDate", "techEvalDate", "techEvalTime", "openingVenue", "warrantyDurable",
+            "warrantyConsumable", "itemsTable"
+        ];
+
+        // 1. Scan Terms
         selectedTermsList.forEach((term) => {
             const textToScan = `${term.title || ""} ${term.description || ""}`;
             const matches = textToScan.match(/\{\{([^}]+)\}\}/g) || [];
             matches.forEach((m) => {
                 const rawKey = m.replace(/^\{\{|\}\}$/g, "").trim();
-                // Exclude system global constants
-                if (rawKey && rawKey !== "itemsTable") {
+                if (rawKey && !standardKeys.includes(rawKey)) {
                     if (!placeholderMap.has(rawKey)) {
-                        placeholderMap.set(rawKey, []);
+                        placeholderMap.set(rawKey, { usedInTerms: [], usedInAnnexures: [] });
                     }
-                    if (!placeholderMap.get(rawKey).includes(term.title)) {
-                        placeholderMap.get(rawKey).push(term.title);
+                    if (!placeholderMap.get(rawKey).usedInTerms.includes(term.title)) {
+                        placeholderMap.get(rawKey).usedInTerms.push(term.title);
                     }
                 }
             });
         });
 
-        return Array.from(placeholderMap.entries()).map(([key, usedInTerms]) => ({
+        // 2. Scan Annexures
+        selectedAnnexList.forEach((annex) => {
+            let textToScan = `${annex.title || ""} ${annex.description || ""} ${annex.contentTemplate || ""}`;
+            if (annex.blocks && Array.isArray(annex.blocks)) {
+                textToScan += " " + JSON.stringify(annex.blocks);
+            }
+            const matches = textToScan.match(/\{\{([^}]+)\}\}/g) || [];
+            matches.forEach((m) => {
+                const rawKey = m.replace(/^\{\{|\}\}$/g, "").trim();
+                if (rawKey && !standardKeys.includes(rawKey)) {
+                    if (!placeholderMap.has(rawKey)) {
+                        placeholderMap.set(rawKey, { usedInTerms: [], usedInAnnexures: [] });
+                    }
+                    const cleanAnnexTitle = annex.title.split(":")[0]?.trim() || annex.title;
+                    if (!placeholderMap.get(rawKey).usedInAnnexures.includes(cleanAnnexTitle)) {
+                        placeholderMap.get(rawKey).usedInAnnexures.push(cleanAnnexTitle);
+                    }
+                }
+            });
+        });
+
+        return Array.from(placeholderMap.entries()).map(([key, info]) => ({
             key,
-            usedInTerms,
+            usedInTerms: info.usedInTerms,
+            usedInAnnexures: info.usedInAnnexures,
         }));
     };
 
@@ -410,8 +555,16 @@ const CreateTender = () => {
                 },
             };
 
-            const created = await createTender(tenderPayload);
-            navigate(`/preview/${created.id}`);
+            let targetId = editId;
+            if (isEditMode) {
+                const updated = await updateTender(editId, tenderPayload);
+                targetId = updated.id || editId;
+            } else {
+                const created = await createTender(tenderPayload);
+                targetId = created.id;
+            }
+
+            navigate(`/preview/${targetId}`);
         } catch (err) {
             console.error("Save failed", err);
             alert("Failed to save tender: " + (err.message || "Please check your inputs."));
@@ -436,9 +589,37 @@ const CreateTender = () => {
 
     return (
         <div className="max-w-5xl mx-auto py-6 px-4 animate-in fade-in duration-300">
+            {/* EDIT MODE BANNER */}
+            {isEditMode && (
+                <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
+                            <Edit3 className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-amber-950">Editing Existing Tender (ID: {editId})</h4>
+                            <p className="text-xs text-amber-700">Modify items, dates, terms & conditions, or annexures and save to update this tender.</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate(`/preview/${editId}`)}
+                        className="px-4 py-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 shadow-xs"
+                    >
+                        <Eye className="w-3.5 h-3.5" /> View Live Preview
+                    </button>
+                </div>
+            )}
+
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Create Tender Document</h1>
-                <p className="text-slate-500 mt-1">Select document type and fill in the required dynamic specifications.</p>
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+                    {isEditMode ? "Edit Tender Configuration" : "Create Tender Document"}
+                </h1>
+                <p className="text-slate-500 mt-1">
+                    {isEditMode
+                        ? `Updating "${formData.tenderName || "Tender"}" - edit specifications, articles, terms, and annexures.`
+                        : "Select document type and fill in the required dynamic specifications."}
+                </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -539,17 +720,15 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                Department / Workshop / Centre Name *
-                            </label>
-                            <input
-                                type="text"
-                                name="departmentName"
-                                value={formData.departmentName}
-                                onChange={handleChange}
-                                placeholder="e.g. Store Purchase Office or Department of Physics"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-slate-900"
+                            <SearchableSelect
+                                label="Department / Workshop / Centre Name"
                                 required
+                                allowCustom={true}
+                                options={HPU_DEPARTMENTS}
+                                value={formData.departmentName}
+                                onChange={(val) => setFormData((prev) => ({ ...prev, departmentName: val }))}
+                                placeholder="Search or type department name..."
+                                searchPlaceholder="Live search HPU departments..."
                             />
                         </div>
 
@@ -569,17 +748,15 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                Tender Inviting Authority / Designation *
-                            </label>
-                            <input
-                                type="text"
-                                name="tenderInvitingAuthority"
-                                value={formData.tenderInvitingAuthority}
-                                onChange={handleChange}
-                                placeholder="e.g. Store Purchase Officer / Chairman / Director"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-slate-900"
+                            <SearchableSelect
+                                label="Tender Inviting Authority / Designation"
                                 required
+                                allowCustom={true}
+                                options={HPU_AUTHORITIES}
+                                value={formData.tenderInvitingAuthority}
+                                onChange={(val) => setFormData((prev) => ({ ...prev, tenderInvitingAuthority: val }))}
+                                placeholder="Search or type authority designation..."
+                                searchPlaceholder="Live search authority..."
                             />
                         </div>
 
@@ -633,10 +810,10 @@ const CreateTender = () => {
                     </div>
                 </div>
 
-                {/* 3. ESTIMATED COST & SECURITY DEPOSITS */}
+                {/* 3. ESTIMATED VALUE */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <DollarSign className="w-5 h-5 text-purple-600" /> Estimated Value & Security Details
+                        <DollarSign className="w-5 h-5 text-purple-600" /> Estimated Tender Value
                     </h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -666,64 +843,6 @@ const CreateTender = () => {
                                 onChange={handleChange}
                                 placeholder="e.g. Rupees Two Lakh Twenty-Nine Thousand Only"
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-900 text-sm"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                EMD Amount (₹) *
-                            </label>
-                            <input
-                                type="text"
-                                name="emdAmount"
-                                value={formData.emdAmount}
-                                onChange={handleChange}
-                                placeholder="e.g. 5000"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-900"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                EMD Amount in Words
-                            </label>
-                            <input
-                                type="text"
-                                name="emdAmountWords"
-                                value={formData.emdAmountWords}
-                                onChange={handleChange}
-                                placeholder="e.g. Rupees Five Thousand Only"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-900 text-sm"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                Performance Bank Guarantee (PBG Amount ₹)
-                            </label>
-                            <input
-                                type="text"
-                                name="pbgAmount"
-                                value={formData.pbgAmount}
-                                onChange={handleChange}
-                                placeholder="e.g. 10000"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-900"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                EMD / PBG Pledge Officer *
-                            </label>
-                            <input
-                                type="text"
-                                name="emdPledgeOfficer"
-                                value={formData.emdPledgeOfficer}
-                                onChange={handleChange}
-                                placeholder="e.g. Finance Officer, H.P. University, Shimla-05"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-900"
                                 required
                             />
                         </div>
@@ -808,16 +927,14 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                Opening Venue / Office
-                            </label>
-                            <input
-                                type="text"
-                                name="openingVenue"
+                            <SearchableSelect
+                                label="Opening Venue / Office"
+                                allowCustom={true}
+                                options={HPU_VENUES}
                                 value={formData.openingVenue}
-                                onChange={handleChange}
-                                placeholder="e.g. Store Purchase Office"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900"
+                                onChange={(val) => setFormData((prev) => ({ ...prev, openingVenue: val }))}
+                                placeholder="Search or type opening venue..."
+                                searchPlaceholder="Live search venue..."
                             />
                         </div>
                     </div>
@@ -1208,67 +1325,6 @@ const CreateTender = () => {
                     </div>
                 </div>
 
-                {/* 6.1 DYNAMIC CLAUSE PLACEHOLDERS & CUSTOM VARIABLES */}
-                {(() => {
-                    const detectedPlaceholders = getDetectedPlaceholders();
-                    if (detectedPlaceholders.length === 0) return null;
-
-                    return (
-                        <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/50 to-white p-6 rounded-2xl border border-indigo-200 shadow-sm space-y-4 animate-in fade-in duration-300">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-indigo-100">
-                                <div>
-                                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                                        <Sliders className="w-5 h-5 text-indigo-600" /> Clause Dynamic Variables & Placeholders
-                                    </h2>
-                                    <p className="text-xs text-slate-600 mt-0.5">
-                                        The terms and conditions selected above contain dynamic placeholders enclosed in <code className="bg-indigo-100/80 text-indigo-800 px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">{"{{...}}"}</code>. Enter the custom values below to populate them directly into your tender document.
-                                    </p>
-                                </div>
-                                <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200 shadow-xs flex items-center gap-1 self-start sm:self-auto">
-                                    <Sparkles className="w-3 h-3 text-indigo-600" /> {detectedPlaceholders.length} Variable{detectedPlaceholders.length > 1 ? "s" : ""} Detected
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                                {detectedPlaceholders.map(({ key, usedInTerms }) => {
-                                    const val = formData.variables?.[key] !== undefined ? formData.variables[key] : "";
-                                    const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-                                    return (
-                                        <div
-                                            key={key}
-                                            className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs space-y-2 hover:border-indigo-300 transition-all"
-                                        >
-                                            <div className="flex items-center justify-between gap-1">
-                                                <label className="block text-xs font-bold text-slate-800 truncate" title={key}>
-                                                    {label}
-                                                </label>
-                                                <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold">
-                                                    {"{{" + key + "}}"}
-                                                </span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={val}
-                                                onChange={(e) => handleVariableChange(key, e.target.value)}
-                                                placeholder={`Enter ${label.toLowerCase()}...`}
-                                                className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-100 outline-none transition-all font-medium"
-                                            />
-                                            <div
-                                                className="flex items-center gap-1 text-[11px] text-slate-500 pt-0.5 truncate"
-                                                title={`Used in: ${usedInTerms.join(", ")}`}
-                                            >
-                                                <span className="font-semibold text-slate-400">Used in:</span>
-                                                <span className="truncate text-slate-600 font-medium">{usedInTerms.join(", ")}</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })()}
-
                 {/* 7. IS ANNEXURE REQUIRED? & ANNEXURES SELECTION */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-4 border-b border-slate-100">
@@ -1405,22 +1461,90 @@ const CreateTender = () => {
                     )}
                 </div>
 
+                {/* 8. UNIFIED DYNAMIC CLAUSE & ANNEXURE VARIABLES (ASK ONCE) */}
+                {(() => {
+                    const detectedPlaceholders = getDetectedPlaceholders();
+                    if (detectedPlaceholders.length === 0) return null;
+
+                    return (
+                        <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/50 to-white p-6 rounded-2xl border border-indigo-200 shadow-sm space-y-4 animate-in fade-in duration-300">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-indigo-100">
+                                <div>
+                                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                                        <Sliders className="w-5 h-5 text-indigo-600" /> Dynamic Clause & Annexure Variables
+                                    </h2>
+                                    <p className="text-xs text-slate-600 mt-0.5">
+                                        The clauses and annexures selected above require specific details (e.g. EMD/PBG amounts, warranty durations, custom parameters). Enter them once below to automatically populate across the entire tender document.
+                                    </p>
+                                </div>
+                                <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200 shadow-xs flex items-center gap-1 self-start sm:self-auto">
+                                    <Sparkles className="w-3 h-3 text-indigo-600" /> {detectedPlaceholders.length} Variable{detectedPlaceholders.length > 1 ? "s" : ""} Required
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                                {detectedPlaceholders.map(({ key, usedInTerms, usedInAnnexures }) => {
+                                    const val = formData.variables?.[key] !== undefined ? formData.variables[key] : (formData[key] || "");
+                                    const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+                                    return (
+                                        <div
+                                            key={key}
+                                            className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs space-y-2 hover:border-indigo-300 transition-all"
+                                        >
+                                            <div className="flex items-center justify-between gap-1">
+                                                <label className="block text-xs font-bold text-slate-800 truncate" title={key}>
+                                                    {label}
+                                                </label>
+                                                <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold">
+                                                    {"{{" + key + "}}"}
+                                                </span>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={val}
+                                                onChange={(e) => handleVariableChange(key, e.target.value)}
+                                                placeholder={`Enter ${label.toLowerCase()}...`}
+                                                className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-100 outline-none transition-all font-medium"
+                                            />
+                                            <div className="flex flex-col gap-0.5 text-[10.5px] text-slate-500 pt-0.5">
+                                                {usedInTerms && usedInTerms.length > 0 && (
+                                                    <div className="flex items-center gap-1 truncate" title={`Clause: ${usedInTerms.join(", ")}`}>
+                                                        <span className="font-semibold text-slate-400">Clause:</span>
+                                                        <span className="truncate text-slate-600 font-medium">{usedInTerms.join(", ")}</span>
+                                                    </div>
+                                                )}
+                                                {usedInAnnexures && usedInAnnexures.length > 0 && (
+                                                    <div className="flex items-center gap-1 truncate text-purple-700" title={`Annexure: ${usedInAnnexures.join(", ")}`}>
+                                                        <span className="font-semibold text-purple-500">Annexure:</span>
+                                                        <span className="truncate text-purple-800 font-medium">{usedInAnnexures.join(", ")}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* SUBMIT BUTTON */}
                 <div className="flex justify-end gap-4 pt-4 pb-12">
                     <button
                         type="button"
-                        onClick={() => navigate("/my-tenders")}
+                        onClick={() => navigate(isEditMode ? `/preview/${editId}` : "/my-tenders")}
                         className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-colors cursor-pointer"
                     >
-                        Cancel
+                        {isEditMode ? "Discard & View Preview" : "Cancel"}
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
                         className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-700 hover:via-violet-700 hover:to-indigo-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-purple-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
                     >
-                        {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-                        Generate & Preview Document
+                        {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : isEditMode ? <Save className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                        {isEditMode ? "Save Changes & Open Preview" : "Generate & Preview Document"}
                     </button>
                 </div>
             </form>

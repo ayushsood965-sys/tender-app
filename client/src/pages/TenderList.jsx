@@ -20,7 +20,9 @@ import {
     ChevronUp,
     Shield,
     Sparkles,
+    Loader2,
 } from "lucide-react";
+import SearchableSelect from "../components/SearchableSelect";
 
 export default function TenderList() {
     const { user, isSuperAdmin } = useAuth();
@@ -30,6 +32,7 @@ export default function TenderList() {
     const [filteredTenders, setFilteredTenders] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedDocType, setSelectedDocType] = useState("all");
+    const [selectedDept, setSelectedDept] = useState("all");
     const [loading, setLoading] = useState(true);
 
     const [expandedTenderId, setExpandedTenderId] = useState(null);
@@ -43,10 +46,13 @@ export default function TenderList() {
         setLoading(true);
         try {
             const data = await fetchTenders();
-            setTenders(data);
-            setFilteredTenders(data);
+            const list = Array.isArray(data) ? data : [];
+            setTenders(list);
+            setFilteredTenders(list);
         } catch (err) {
             console.error("Failed to load tenders:", err);
+            setTenders([]);
+            setFilteredTenders([]);
         } finally {
             setLoading(false);
         }
@@ -63,6 +69,10 @@ export default function TenderList() {
             result = result.filter((t) => t.documentType === selectedDocType);
         }
 
+        if (selectedDept !== "all") {
+            result = result.filter((t) => t.departmentName === selectedDept);
+        }
+
         if (searchTerm.trim()) {
             const lower = searchTerm.toLowerCase();
             result = result.filter(
@@ -74,7 +84,7 @@ export default function TenderList() {
         }
 
         setFilteredTenders(result);
-    }, [searchTerm, selectedDocType, tenders]);
+    }, [searchTerm, selectedDocType, selectedDept, tenders]);
 
     const toggleExpandTender = async (tenderId) => {
         if (expandedTenderId === tenderId) {
@@ -187,10 +197,10 @@ export default function TenderList() {
                 </Link>
             </div>
 
-            {/* Filter Bar */}
-            <div className="bg-white border border-purple-100/80 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-sm">
+            {/* Filter Bar with Live Search Comboboxes */}
+            <div className="bg-white border border-purple-100/80 rounded-2xl p-4 flex flex-col md:flex-row gap-3 items-center shadow-sm">
                 {/* Search Input */}
-                <div className="relative w-full md:w-80">
+                <div className="relative w-full md:w-72">
                     <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
                     <input
                         type="text"
@@ -201,26 +211,38 @@ export default function TenderList() {
                     />
                 </div>
 
-                {/* Doc Type Filters */}
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-                    {[
-                        { key: "all", label: "All Formats" },
-                        { key: "Limited Tender Document", label: "Limited Tender" },
-                        { key: "GeM ATC Document", label: "GeM ATC" },
-                        { key: "e-tender Document", label: "e-Tender" },
-                    ].map((type) => (
-                        <button
-                            key={type.key}
-                            onClick={() => setSelectedDocType(type.key)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                                selectedDocType === type.key
-                                    ? "bg-purple-100 text-purple-800 border border-purple-300 shadow-xs"
-                                    : "text-slate-600 hover:text-purple-700 hover:bg-purple-50/60 border border-transparent"
-                            }`}
-                        >
-                            {type.label}
-                        </button>
-                    ))}
+                {/* Searchable Document Format Combobox */}
+                <div className="w-full md:w-56">
+                    <SearchableSelect
+                        options={[
+                            { value: "all", label: "All Formats", badge: `${tenders.length}` },
+                            { value: "Limited Tender Document", label: "Limited Tender", badge: "Sealed" },
+                            { value: "GeM ATC Document", label: "GeM ATC", badge: "GeM" },
+                            { value: "e-tender Document", label: "e-Tender", badge: "e-Proc" },
+                        ]}
+                        value={selectedDocType}
+                        onChange={(val) => setSelectedDocType(val || "all")}
+                        placeholder="Filter by Format..."
+                        searchPlaceholder="Search format..."
+                    />
+                </div>
+
+                {/* Searchable Department Combobox */}
+                <div className="w-full md:w-64">
+                    <SearchableSelect
+                        options={[
+                            { value: "all", label: "All Departments", badge: "All" },
+                            ...Array.from(new Set(tenders.map((t) => t.departmentName).filter(Boolean))).map((d) => ({
+                                value: d,
+                                label: d,
+                                badge: `${tenders.filter((t) => t.departmentName === d).length}`,
+                            }))
+                        ]}
+                        value={selectedDept}
+                        onChange={(val) => setSelectedDept(val || "all")}
+                        placeholder="Filter by Department..."
+                        searchPlaceholder="Live search department..."
+                    />
                 </div>
             </div>
 
@@ -297,15 +319,28 @@ export default function TenderList() {
                                     <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                                         <button
                                             onClick={() => navigate(`/preview/${tender.id}`)}
-                                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-700 hover:via-violet-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-purple-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
+                                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-700 hover:via-violet-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-purple-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                                            title="Open Live A4 Preview & Word-like Inline Editor"
                                         >
                                             <Eye className="w-3.5 h-3.5" />
-                                            <span>Preview & Edit</span>
+                                            <span>Live Preview</span>
                                         </button>
+
+                                        {isOwner && (
+                                            <button
+                                                onClick={() => navigate(`/edit-tender/${tender.id}`)}
+                                                className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold border border-blue-200 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                                                title="Edit Form (Dates, Articles/Items, Terms & Conditions, Annexures)"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                                <span>Edit Form</span>
+                                            </button>
+                                        )}
 
                                         <button
                                             onClick={() => toggleExpandTender(tender.id)}
                                             className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold border border-purple-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                                            title="View Saved Snapshot Versions & Exports"
                                         >
                                             <FileDown className="w-3.5 h-3.5 text-purple-700" />
                                             <span>Saved Versions</span>
@@ -356,11 +391,25 @@ export default function TenderList() {
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <button
                                                                 onClick={() => handleExport(doc, "docx")}
-                                                                disabled={exportingDoc.id === doc.id}
-                                                                className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                                                disabled={exportingDoc.id === doc.id && exportingDoc.type === "docx"}
+                                                                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                                                    exportingDoc.id === doc.id && exportingDoc.type === "docx"
+                                                                        ? "bg-purple-100 text-purple-900 border-purple-300 shadow-inner animate-pulse cursor-wait"
+                                                                        : "bg-purple-50 hover:bg-purple-100 text-purple-800 border-purple-200 hover:scale-[1.02] active:scale-[0.98]"
+                                                                }`}
+                                                                title="Download high-fidelity Word DOCX document"
                                                             >
-                                                                <Download className="w-3.5 h-3.5" />
-                                                                <span>{exportingDoc.id === doc.id && exportingDoc.type === "docx" ? "..." : "Word DOCX"}</span>
+                                                                {exportingDoc.id === doc.id && exportingDoc.type === "docx" ? (
+                                                                    <>
+                                                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-700" />
+                                                                        <span>Generating DOCX...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Download className="w-3.5 h-3.5" />
+                                                                        <span>Word DOCX</span>
+                                                                    </>
+                                                                )}
                                                             </button>
 
                                                             {isOwner && (

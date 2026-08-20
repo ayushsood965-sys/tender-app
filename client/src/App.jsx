@@ -50,7 +50,7 @@ function ProtectedRoute({ children }) {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/landing" replace />;
+        return <Navigate to="/login" replace />;
     }
 
     return children;
@@ -80,8 +80,8 @@ export default function App() {
     return (
         <AuthProvider>
             <Routes>
-                {/* Dynamic Home Route */}
-                <Route path="/" element={<RootRoute />} />
+                {/* Root Route redirects directly to /dashboard */}
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 
                 {/* Full-screen Standalone Landing Page */}
                 <Route path="/landing" element={<LandingPage />} />
@@ -100,6 +100,8 @@ export default function App() {
                 >
                     <Route path="/dashboard" element={<DashboardOverview />} />
                     <Route path="/create-tender" element={<CreateTender />} />
+                    <Route path="/edit-tender/:id" element={<CreateTender />} />
+                    <Route path="/tenders/:id/edit" element={<CreateTender />} />
                     <Route path="/my-tenders" element={<TenderList />} />
                     <Route path="/master-repository" element={<MasterRepository />} />
                     
@@ -133,7 +135,7 @@ export default function App() {
                 />
 
                 {/* Catch-all fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
         </AuthProvider>
     );

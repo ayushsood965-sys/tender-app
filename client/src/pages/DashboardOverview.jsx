@@ -18,6 +18,7 @@ import {
     Sparkles,
     CheckCircle2,
     Clock,
+    Edit3,
 } from "lucide-react";
 
 export default function DashboardOverview() {
@@ -37,17 +38,21 @@ export default function DashboardOverview() {
         const loadOverview = async () => {
             try {
                 const [dashData, tendersList] = await Promise.all([
-                    fetchDashboardData(),
-                    fetchTenders(),
+                    fetchDashboardData().catch(() => ({})),
+                    fetchTenders().catch(() => []),
                 ]);
 
+                const safeTenders = Array.isArray(tendersList) ? tendersList : [];
+                const safeCategories = Array.isArray(dashData?.categories) ? dashData.categories : [];
+                const safeTerms = Array.isArray(dashData?.terms) ? dashData.terms : [];
+
                 setStats({
-                    totalTenders: tendersList.length,
-                    totalCategories: dashData.categories?.length || 0,
-                    totalTerms: dashData.terms?.length || 0,
-                    myTenders: tendersList.length,
+                    totalTenders: safeTenders.length,
+                    totalCategories: safeCategories.length,
+                    totalTerms: safeTerms.length,
+                    myTenders: safeTenders.length,
                 });
-                setRecentTenders(tendersList.slice(0, 5));
+                setRecentTenders(safeTenders.slice(0, 5));
             } catch (err) {
                 console.error("Dashboard load error:", err);
             } finally {
@@ -313,7 +318,15 @@ export default function DashboardOverview() {
                                                     className="px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                                 >
                                                     <Eye className="w-3.5 h-3.5" />
-                                                    <span>Preview & Edit</span>
+                                                    <span>Preview</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => navigate(`/edit-tender/${t.id}`)}
+                                                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                                    title="Edit Tender Form"
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                                    <span>Edit Form</span>
                                                 </button>
                                             </div>
                                         </td>

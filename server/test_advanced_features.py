@@ -148,6 +148,13 @@ def test_advanced_suite():
     if os.path.exists(temp_zip_path):
         os.remove(temp_zip_path)
 
+    # Clean up test tender and document from MongoDB
+    try:
+        requests.delete(f"{BASE_URL}/tenders/{dup_tender['id']}")
+        requests.delete(f"{BASE_URL}/annexures/{target_annex['id']}")
+    except Exception:
+        pass
+
     print("\n==================================================")
     print("🎉 ALL ADVANCED MODULAR FEATURES VERIFIED & TESTED!")
     print("==================================================")
