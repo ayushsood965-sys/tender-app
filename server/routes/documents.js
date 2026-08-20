@@ -2,10 +2,30 @@ const express = require("express");
 const router = express.Router();
 const SavedDocument = require("../models/SavedDocument");
 const { optionalAuth } = require("../middleware/auth");
-const { exec } = require("child_process");
+const { exec, execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+
+// Determine the available Python executable on the host or container environment
+let cachedPythonBin = null;
+function getPythonBin() {
+    if (cachedPythonBin) return cachedPythonBin;
+    if (process.env.PYTHON_BIN) {
+        cachedPythonBin = process.env.PYTHON_BIN;
+        return cachedPythonBin;
+    }
+    const candidates = process.platform === "win32" ? ["python", "python3", "py"] : ["python3", "python"];
+    for (const bin of candidates) {
+        try {
+            execSync(`${bin} --version`, { stdio: "ignore" });
+            cachedPythonBin = bin;
+            return cachedPythonBin;
+        } catch (e) {}
+    }
+    cachedPythonBin = process.platform === "win32" ? "python" : "python3";
+    return cachedPythonBin;
+}
 
 // Save a new document version
 router.post("/", optionalAuth, async (req, res) => {
@@ -89,7 +109,8 @@ router.get("/:id/docx", async (req, res) => {
         }), "utf-8");
 
         const pyScript = path.join(__dirname, "..", "docx_generator.py");
-        const cmd = `python "${pyScript}" "${jsonPath}" "${docxPath}"`;
+        const pyBin = getPythonBin();
+        const cmd = `${pyBin} "${pyScript}" "${jsonPath}" "${docxPath}"`;
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
@@ -140,7 +161,8 @@ router.get("/:id/pdf", async (req, res) => {
         }), "utf-8");
 
         const pyScript = path.join(__dirname, "..", "pdf_generator.py");
-        const cmd = `python "${pyScript}" "${jsonPath}" "${pdfPath}"`;
+        const pyBin = getPythonBin();
+        const cmd = `${pyBin} "${pyScript}" "${jsonPath}" "${pdfPath}"`;
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
@@ -192,7 +214,8 @@ router.get("/:id/export-package", async (req, res) => {
         }), "utf-8");
 
         const pyScript = path.join(__dirname, "..", "pdf_generator.py");
-        const cmd = `python "${pyScript}" "${jsonPath}" "${zipPath}" --package ${profile}`;
+        const pyBin = getPythonBin();
+        const cmd = `${pyBin} "${pyScript}" "${jsonPath}" "${zipPath}" --package ${profile}`;
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {

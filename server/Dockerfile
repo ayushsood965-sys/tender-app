@@ -1,10 +1,11 @@
 FROM node:20-bookworm-slim
 
-# Install Python 3 and python-docx for high-fidelity DOCX generation
+# Install Python 3, python-is-python3 and python-docx/reportlab for DOCX and PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
-    && pip3 install --no-cache-dir --break-system-packages python-docx \
+    python-is-python3 \
+    && pip3 install --no-cache-dir --break-system-packages python-docx reportlab \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
