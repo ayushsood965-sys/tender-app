@@ -86,17 +86,26 @@ const TenderPreview = () => {
                 setAnnexures(allAnnexures || []);
                 setData(tender);
 
-                // If loading a saved document, use its saved pages
+                // If loading a saved document, use its saved pages unless legacy format is detected
                 if (savedId) {
                     try {
                         const savedDoc = await fetchSavedDocument(savedId);
                         if (savedDoc && savedDoc.pages && typeof savedDoc.pages === 'object' && Object.keys(savedDoc.pages).length > 0) {
                             setCurrentSavedDoc(savedDoc);
                             setSaveName(savedDoc.name || `Version ${savedDoc.id}`);
-                            const loadedPages = Object.keys(savedDoc.pages)
-                                .sort((a, b) => parseInt(a) - parseInt(b))
-                                .map(key => ({ id: key, html: savedDoc.pages[key] }));
-                            setPages(loadedPages);
+                            const pageValues = Object.values(savedDoc.pages).join(" ");
+                            const hasOldFormat = pageValues.includes("Annexure-A") || pageValues.includes("Annexure – ‘A’") || !pageValues.includes("Annexure-I");
+
+                            if (hasOldFormat) {
+                                console.log("Detected legacy annexure layout in saved document. Auto-upgrading to compliant Annexure-I layout...");
+                                const generatedPages = generatePages(tender, selectedTerms, allCategories, allAnnexures);
+                                setPages(generatedPages);
+                            } else {
+                                const loadedPages = Object.keys(savedDoc.pages)
+                                    .sort((a, b) => parseInt(a) - parseInt(b))
+                                    .map(key => ({ id: key, html: savedDoc.pages[key] }));
+                                setPages(loadedPages);
+                            }
                         } else {
                             const generatedPages = generatePages(tender, selectedTerms, allCategories, allAnnexures);
                             setPages(generatedPages);
@@ -259,6 +268,7 @@ const TenderPreview = () => {
                 bidEndDate: formatDate(tender.bidEndDate),
                 techEvalDate: formatDate(tender.techEvalDate),
                 itemsTable: generatedItemsTable,
+                items_table: generatedItemsTable,
                 ...(tender.variables || {}),
                 ...(variables || {}),
             };
@@ -273,6 +283,8 @@ const TenderPreview = () => {
                     result = result.replace(regex, String(val));
                 }
             });
+            // Ensure no legacy Annexure-A remains in rendered text
+            result = result.replace(/Annexure\s*[-–—]?\s*[‘'"]?A[’'"]?/gi, "Annexure-II");
             return result;
         };
 
@@ -396,8 +408,8 @@ const TenderPreview = () => {
                     <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; text-decoration: underline;">Submission of Bids</h3>
                     <p style="text-align: justify; margin-bottom: 8px;">The bid shall be submitted in separate sealed covers:</p>
                     <div style="padding-left: 12px; margin-bottom: 10px; text-align: justify;">
-                        <p style="margin-bottom: 6px;"><strong>Cover 1: Technical Bid.</strong> This cover shall contain all supporting documents pertaining to the technical specifications, EMD, eligibility criteria, and other related requirements. The cover shall be clearly superscribed with the words <strong>"Technical Bid"</strong>.</p>
-                        <p style="margin-bottom: 6px;"><strong>Cover 2: Financial Bid.</strong> This cover shall contain the bidder's price quotation in the prescribed format given at <strong>Annexure – ‘A’</strong>. The cover shall be clearly superscribed with the words <strong>"Financial Bid"</strong>.</p>
+                        <p style="margin-bottom: 6px;"><strong>Cover 1: Technical Bid.</strong> This cover shall contain all supporting documents pertaining to the technical specifications, EMD, eligibility criteria, and the duly filled & signed Mandatory Compliance Sheet given at <strong>Annexure-I</strong>. The cover shall be clearly superscribed with the words <strong>"Technical Bid"</strong>.</p>
+                        <p style="margin-bottom: 6px;"><strong>Cover 2: Financial Bid.</strong> This cover shall contain the bidder's price quotation in the prescribed format given at <strong>Annexure-II</strong> (Financial Bid Submission Form & Items Schedule Table). The cover shall be clearly superscribed with the words <strong>"Financial Bid"</strong>.</p>
                     </div>
                     <p style="text-align: justify; margin-bottom: 6px;">Both Cover 1 and Cover 2 shall be placed in a larger, sealed outer envelope. The outer envelope shall be superscribed as:</p>
                     <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #004821; padding: 8px 14px; margin-bottom: 8px;">
@@ -623,11 +635,22 @@ const TenderPreview = () => {
             const selectedAnnexList = allAnnexures.filter(a => selectedAnnexIds.has(String(a.id)));
 
             // Filter out only duplicate templates of the eligibility fact sheet itself so Annexure-I is not duplicated
-            const otherAnnexures = selectedAnnexList.filter(a =>
+            let otherAnnexures = selectedAnnexList.filter(a =>
                 !a.title.toLowerCase().includes("eligibility fact sheet") &&
                 !a.title.toLowerCase().includes("compliance sheet of eligibility") &&
                 a.code !== "ANNEX_COMPLIANCE_FACT"
             );
+
+            // For Limited Tender, ensure Financial Bid Submission Form (code: "ANNEX_FIN_BID" or ID: 1) is always placed first in otherAnnexures so it is assigned Annexure-II
+            if (isLimited) {
+                otherAnnexures.sort((a, b) => {
+                    const aIsFin = a.code === "ANNEX_FIN_BID" || Number(a.id) === 1 || a.category === "financial" || a.title.toLowerCase().includes("financial bid");
+                    const bIsFin = b.code === "ANNEX_FIN_BID" || Number(b.id) === 1 || b.category === "financial" || b.title.toLowerCase().includes("financial bid");
+                    if (aIsFin && !bIsFin) return -1;
+                    if (!aIsFin && bIsFin) return 1;
+                    return (Number(a.id) || 0) - (Number(b.id) || 0);
+                });
+            }
 
             // 1. Gather all Document Proof items from selected terms
             const docProofItems = [];
@@ -747,9 +770,10 @@ const TenderPreview = () => {
                 const assignedRoman = toRoman(idx + 2);
                 let renderedTemplate = annex.contentTemplate || `<p>${annex.title}</p>`;
 
-                // Dynamically replace Annexure header Roman numerals in template
+                // Dynamically replace Annexure header Roman numerals and letters in template
                 renderedTemplate = renderedTemplate.replace(/(<h[1-3][^>]*>)\s*Annexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+/gi, `$1Annexure-${assignedRoman}`);
-                renderedTemplate = renderedTemplate.replace(/\bAnnexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+\b/i, `Annexure-${assignedRoman}`);
+                renderedTemplate = renderedTemplate.replace(/\bAnnexure\s*[-–—]?\s*[A-Z0-9IVXLCDM]+\b/gi, `Annexure-${assignedRoman}`);
+                renderedTemplate = renderedTemplate.replace(/Annexure\s*[-–—]?\s*[‘'"]?A[’'"]?/gi, `Annexure-${assignedRoman}`);
                 renderedTemplate = replaceVars(renderedTemplate);
 
                 generatedPages.push({
@@ -947,6 +971,19 @@ const TenderPreview = () => {
                     className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 >
                     <Plus size={16} /> Add Page
+                </button>
+
+                <button
+                    onClick={() => {
+                        if (window.confirm("Regenerate preview pages with the latest Annexure-I and sequential Roman numeral layout? Any unsaved manual text edits on this page will be reset.")) {
+                            const gen = generatePages(data, terms, categories, annexures);
+                            setPages(gen);
+                        }
+                    }}
+                    className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    title="Regenerate all document pages to the latest compliant standard layout"
+                >
+                    <RefreshCw size={14} className="text-amber-600" /> Regenerate Layout
                 </button>
 
                 {savedId && (

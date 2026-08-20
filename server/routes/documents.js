@@ -63,13 +63,21 @@ router.get("/:id/docx", async (req, res) => {
         const doc = await SavedDocument.findOne({ id: parseInt(req.params.id) });
         if (!doc) return res.status(404).json({ error: "Document not found" });
 
-        const orderedPages = Object.keys(doc.pages || {})
+        let orderedPages = Object.keys(doc.pages || {})
             .sort((a, b) => parseInt(a) - parseInt(b))
             .map(k => doc.pages[k]);
 
         if (orderedPages.length === 0) {
             return res.status(400).json({ error: "No pages found in this document" });
         }
+
+        // Clean any legacy Annexure-A or unreplaced tokens from saved pages before generating DOCX
+        orderedPages = orderedPages.map(p => {
+            if (!p) return "";
+            return p
+                .replace(/format given at <strong>Annexure\s*[-–—]?\s*[‘'"]?A[’'"]?<\/strong>/gi, "format given at <strong>Annexure-II</strong> (Financial Bid Submission Form & Items Schedule Table)")
+                .replace(/Annexure\s*[-–—]?\s*[‘'"]?A[’'"]?/gi, "Annexure-II");
+        });
 
         const tempDir = os.tmpdir();
         const jsonPath = path.join(tempDir, `doc_${doc.id}_${Date.now()}.json`);
