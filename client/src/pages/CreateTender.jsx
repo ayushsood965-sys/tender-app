@@ -720,15 +720,17 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <SearchableSelect
-                                label="Department / Workshop / Centre Name"
-                                required
-                                allowCustom={true}
-                                options={HPU_DEPARTMENTS}
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                Department / Workshop / Centre Name *
+                            </label>
+                            <input
+                                type="text"
+                                name="departmentName"
                                 value={formData.departmentName}
-                                onChange={(val) => setFormData((prev) => ({ ...prev, departmentName: val }))}
-                                placeholder="Search or type department name..."
-                                searchPlaceholder="Live search HPU departments..."
+                                onChange={handleChange}
+                                placeholder="e.g. Department of Physics or Store Purchase Office"
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-slate-900"
+                                required
                             />
                         </div>
 
@@ -748,15 +750,17 @@ const CreateTender = () => {
                         </div>
 
                         <div>
-                            <SearchableSelect
-                                label="Tender Inviting Authority / Designation"
-                                required
-                                allowCustom={true}
-                                options={HPU_AUTHORITIES}
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                Tender Inviting Authority / Designation *
+                            </label>
+                            <input
+                                type="text"
+                                name="tenderInvitingAuthority"
                                 value={formData.tenderInvitingAuthority}
-                                onChange={(val) => setFormData((prev) => ({ ...prev, tenderInvitingAuthority: val }))}
-                                placeholder="Search or type authority designation..."
-                                searchPlaceholder="Live search authority..."
+                                onChange={handleChange}
+                                placeholder="e.g. Store Purchase Officer or Chairman, Department of Physics"
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-slate-900"
+                                required
                             />
                         </div>
 
