@@ -177,10 +177,8 @@ router.put("/:id", optionalAuth, async (req, res) => {
         const annexure = await Annexure.findOne({ id: parseInt(req.params.id) });
         if (!annexure) return res.status(404).json({ error: "Annexure not found" });
 
+        // Allow all users to update and customize master and custom annexures
         const isSuperAdmin = req.user && req.user.role === "superadmin";
-        if (annexure.isMaster && !isSuperAdmin) {
-            return res.status(403).json({ error: "System Master annexures can only be edited by Super Admin." });
-        }
 
         // Archive previous version in history if contentTemplate changed
         const historyEntry = {

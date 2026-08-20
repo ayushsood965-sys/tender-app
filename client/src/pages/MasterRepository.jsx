@@ -852,26 +852,25 @@ export default function MasterRepository() {
                                                 <Copy className="w-3.5 h-3.5" />
                                             </button>
 
-                                            {canEdit && (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingAnnexure(annex);
-                                                            setIsVisualBuilderOpen(true);
-                                                        }}
-                                                        className="p-1.5 text-slate-500 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
-                                                        title="Edit in Visual Builder"
-                                                    >
-                                                        <Edit3 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteModal({ open: true, id: annex.id, title: annex.title, type: "annexure" })}
-                                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                                        title="Delete Annexure"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingAnnexure(annex);
+                                                    setIsVisualBuilderOpen(true);
+                                                }}
+                                                className="p-1.5 text-slate-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                                title="Edit Annexure Template"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            {(isSuperAdmin || !annex.isMaster) && (
+                                                <button
+                                                    onClick={() => setDeleteModal({ open: true, id: annex.id, title: annex.title, type: "annexure" })}
+                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                    title="Delete Annexure"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
                                             )}
                                         </div>
                                     </div>
